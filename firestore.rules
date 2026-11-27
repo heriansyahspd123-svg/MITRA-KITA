@@ -1,0 +1,735 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Hardened Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isVerifiedUser() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidOptionalId(id) {
+      return id is string && (id == '' || isValidId(id));
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBoundedString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidPartnerIdList(listVal) {
+      return listVal is list
+        && listVal.size() <= 50
+        && (listVal.size() == 0 || (listVal[0] is string && listVal[0].size() >= 1 && listVal[0].size() <= 64));
+    }
+
+    function ownsProgram(programId) {
+      return isValidId(programId)
+        && exists(/databases/$(database)/documents/programs/$(programId))
+        && get(/databases/$(database)/documents/programs/$(programId)).data.ownerUid == request.auth.uid;
+    }
+
+    function ownsActivity(activityId) {
+      return isValidId(activityId)
+        && exists(/databases/$(database)/documents/activities/$(activityId))
+        && get(/databases/$(database)/documents/activities/$(activityId)).data.ownerUid == request.auth.uid;
+    }
+
+    function ownsEvaluation(evaluationId) {
+      return isValidId(evaluationId)
+        && exists(/databases/$(database)/documents/evaluations/$(evaluationId))
+        && get(/databases/$(database)/documents/evaluations/$(evaluationId)).data.ownerUid == request.auth.uid;
+    }
+
+    // 3. Entity Validation Blueprints (Anti-Update-Gap)
+
+    function isValidUserProfile(data) {
+      return isVerifiedUser()
+        && data.keys().hasAll([
+          'ownerUid', 'namaPengawas', 'nip', 'email', 'photoURL', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'namaPengawas', 'nip', 'email', 'photoURL', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.ownerUid)
+        && isBoundedString(data.namaPengawas, 1, 150)
+        && isBoundedString(data.nip, 0, 50)
+        && isBoundedString(data.email, 0, 200)
+        && isBoundedString(data.photoURL, 0, 1000)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSchoolProfile(data) {
+      return isVerifiedUser()
+        && data.keys().hasAll([
+          'ownerUid', 'namaSekolah', 'npsn', 'kepalaSekolah', 'namaPengawas',
+          'alamatSekolah', 'tahunAjaran', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'namaSekolah', 'npsn', 'kepalaSekolah', 'nipKepalaSekolah',
+          'namaPengawas', 'nipPengawas', 'alamatSekolah', 'tahunAjaran',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.ownerUid)
+        && isBoundedString(data.namaSekolah, 0, 200)
+        && isBoundedString(data.npsn, 0, 40)
+        && isBoundedString(data.kepalaSekolah, 0, 150)
+        && (!('nipKepalaSekolah' in data) || isBoundedString(data.nipKepalaSekolah, 0, 50))
+        && isBoundedString(data.namaPengawas, 0, 150)
+        && (!('nipPengawas' in data) || isBoundedString(data.nipPengawas, 0, 50))
+        && isBoundedString(data.alamatSekolah, 0, 400)
+        && isBoundedString(data.tahunAjaran, 0, 40)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPartnerCategory(cat) {
+      return cat in [
+        'Orang Tua',
+        'Komite Sekolah',
+        'Puskesmas',
+        'UMKM',
+        'Dunia Usaha',
+        'Pemerintah Desa/Kelurahan',
+        'Perguruan Tinggi',
+        'Komunitas Pendidikan',
+        'Organisasi Masyarakat',
+        'Lainnya'
+      ];
+    }
+
+    function isValidPartner(data, partnerDocId) {
+      return isVerifiedUser()
+        && data.keys().hasAll([
+          'ownerUid', 'id', 'namaSekolah', 'nama', 'kategori', 'penanggungJawab',
+          'telepon', 'alamat', 'jenisKontribusi', 'potensiKerjaSama', 'status',
+          'catatan', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'id', 'namaSekolah', 'nama', 'kategori', 'penanggungJawab',
+          'telepon', 'alamat', 'jenisKontribusi', 'potensiKerjaSama', 'status',
+          'catatan', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.ownerUid)
+        && isBoundedString(data.id, 1, 40)
+        && data.id.matches('^[a-zA-Z0-9_\\-]+$')
+        && partnerDocId == request.auth.uid + '__' + data.id
+        && isBoundedString(data.namaSekolah, 1, 200)
+        && isBoundedString(data.nama, 1, 200)
+        && isBoundedString(data.kategori, 1, 60)
+        && isValidPartnerCategory(data.kategori)
+        && isBoundedString(data.penanggungJawab, 1, 150)
+        && isBoundedString(data.telepon, 0, 40)
+        && isBoundedString(data.alamat, 0, 400)
+        && isBoundedString(data.jenisKontribusi, 0, 500)
+        && isBoundedString(data.potensiKerjaSama, 0, 500)
+        && isBoundedString(data.status, 1, 30)
+        && data.status in ['Aktif', 'Dalam Penjajakan', 'Tidak Aktif']
+        && isBoundedString(data.catatan, 0, 1500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidProgram(data, programId) {
+      return isVerifiedUser()
+        && data.keys().hasAll([
+          'ownerUid', 'id', 'namaSekolah', 'kodeProgram', 'namaProgram',
+          'latarBelakang', 'tujuan', 'areaPm', 'partnerIds', 'sasaran',
+          'bentukKontribusi', 'strategiPelaksanaan', 'waktuPelaksanaan',
+          'penanggungJawab', 'sumberPembiayaan', 'anggaranRencana',
+          'indikatorKeberhasilan', 'targetHasil', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'id', 'namaSekolah', 'kodeProgram', 'namaProgram',
+          'latarBelakang', 'tujuan', 'areaPm', 'partnerIds', 'sasaran',
+          'bentukKontribusi', 'strategiPelaksanaan', 'waktuPelaksanaan',
+          'penanggungJawab', 'sumberPembiayaan', 'anggaranRencana',
+          'indikatorKeberhasilan', 'targetHasil', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.ownerUid)
+        && data.id == programId
+        && isValidId(data.id)
+        && isBoundedString(data.namaSekolah, 1, 200)
+        && isBoundedString(data.kodeProgram, 1, 40)
+        && isBoundedString(data.namaProgram, 1, 200)
+        && isBoundedString(data.latarBelakang, 0, 2000)
+        && isBoundedString(data.tujuan, 0, 2000)
+        && isBoundedString(data.areaPm, 1, 60)
+        && data.areaPm in [
+          'Praktik Pedagogis',
+          'Lingkungan Belajar',
+          'Pemanfaatan Digital',
+          'Kemitraan Pembelajaran'
+        ]
+        && isValidPartnerIdList(data.partnerIds)
+        && isBoundedString(data.sasaran, 0, 400)
+        && isBoundedString(data.bentukKontribusi, 0, 1000)
+        && isBoundedString(data.strategiPelaksanaan, 0, 2000)
+        && isBoundedString(data.waktuPelaksanaan, 0, 120)
+        && isBoundedString(data.penanggungJawab, 0, 150)
+        && isBoundedString(data.sumberPembiayaan, 0, 200)
+        && data.anggaranRencana is number
+        && data.anggaranRencana >= 0
+        && data.anggaranRencana <= 1000000000000
+        && isBoundedString(data.indikatorKeberhasilan, 0, 1500)
+        && isBoundedString(data.targetHasil, 0, 1500)
+        && isBoundedString(data.status, 1, 30)
+        && data.status in ['Direncanakan', 'Sedang Berjalan', 'Selesai', 'Ditunda', 'Dibatalkan']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidActivity(data, activityId) {
+      return isVerifiedUser()
+        && data.keys().hasAll([
+          'ownerUid', 'id', 'namaSekolah', 'namaKegiatan', 'programId',
+          'tanggalPelaksanaan', 'lokasi', 'partnerIds', 'penanggungJawab',
+          'jumlahPeserta', 'deskripsiPelaksanaan', 'hasilKegiatan', 'kendala',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'id', 'namaSekolah', 'namaKegiatan', 'programId',
+          'tanggalPelaksanaan', 'lokasi', 'partnerIds', 'penanggungJawab',
+          'jumlahPeserta', 'deskripsiPelaksanaan', 'hasilKegiatan', 'kendala',
+          'status', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.ownerUid)
+        && data.id == activityId
+        && isValidId(data.id)
+        && isBoundedString(data.namaSekolah, 1, 200)
+        && isBoundedString(data.namaKegiatan, 1, 200)
+        && isValidId(data.programId)
+        && isBoundedString(data.tanggalPelaksanaan, 1, 30)
+        && isBoundedString(data.lokasi, 0, 300)
+        && isValidPartnerIdList(data.partnerIds)
+        && isBoundedString(data.penanggungJawab, 0, 150)
+        && data.jumlahPeserta is number
+        && data.jumlahPeserta >= 0
+        && data.jumlahPeserta <= 1000000
+        && isBoundedString(data.deskripsiPelaksanaan, 0, 2500)
+        && isBoundedString(data.hasilKegiatan, 0, 2500)
+        && isBoundedString(data.kendala, 0, 2000)
+        && isBoundedString(data.status, 1, 30)
+        && data.status in ['Terjadwal', 'Sedang Berlangsung', 'Selesai', 'Tertunda']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEvidence(data, evidenceId) {
+      return isVerifiedUser()
+        && data.keys().hasAll([
+          'ownerUid', 'id', 'namaSekolah', 'namaDokumen', 'jenis',
+          'programId', 'activityId', 'tanggalUnggah', 'keterangan',
+          'fileUrl', 'fileName', 'fileMimeType', 'fileSize', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'id', 'namaSekolah', 'namaDokumen', 'jenis',
+          'programId', 'activityId', 'tanggalUnggah', 'keterangan',
+          'fileUrl', 'fileName', 'fileMimeType', 'fileSize', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.ownerUid)
+        && data.id == evidenceId
+        && isValidId(data.id)
+        && isBoundedString(data.namaSekolah, 1, 200)
+        && isBoundedString(data.namaDokumen, 1, 200)
+        && isBoundedString(data.jenis, 1, 60)
+        && data.jenis in [
+          'Foto Kegiatan',
+          'Dokumen Kerja Sama',
+          'Daftar Hadir',
+          'Notulen',
+          'Laporan Kegiatan',
+          'Dokumen Pendukung Lainnya'
+        ]
+        && isValidId(data.programId)
+        && isValidOptionalId(data.activityId)
+        && isBoundedString(data.tanggalUnggah, 1, 30)
+        && isBoundedString(data.keterangan, 0, 2000)
+        && isBoundedString(data.fileUrl, 0, 700000)
+        && isBoundedString(data.fileName, 0, 255)
+        && isBoundedString(data.fileMimeType, 0, 120)
+        && data.fileSize is number
+        && data.fileSize >= 0
+        && data.fileSize <= 50000000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isScoreRange(v) {
+      return v is int && v >= 1 && v <= 4;
+    }
+
+    function scoresSum(scores) {
+      return scores.ind_1 + scores.ind_2 + scores.ind_3 + scores.ind_4 + scores.ind_5
+        + scores.ind_6 + scores.ind_7 + scores.ind_8 + scores.ind_9 + scores.ind_10;
+    }
+
+    function isValidScoresMap(scores) {
+      return scores is map
+        && scores.keys().hasAll([
+          'ind_1', 'ind_2', 'ind_3', 'ind_4', 'ind_5',
+          'ind_6', 'ind_7', 'ind_8', 'ind_9', 'ind_10'
+        ])
+        && scores.keys().hasOnly([
+          'ind_1', 'ind_2', 'ind_3', 'ind_4', 'ind_5',
+          'ind_6', 'ind_7', 'ind_8', 'ind_9', 'ind_10'
+        ])
+        && isScoreRange(scores.ind_1)
+        && isScoreRange(scores.ind_2)
+        && isScoreRange(scores.ind_3)
+        && isScoreRange(scores.ind_4)
+        && isScoreRange(scores.ind_5)
+        && isScoreRange(scores.ind_6)
+        && isScoreRange(scores.ind_7)
+        && isScoreRange(scores.ind_8)
+        && isScoreRange(scores.ind_9)
+        && isScoreRange(scores.ind_10);
+    }
+
+    function isValidEvaluation(data, evaluationId) {
+      return isVerifiedUser()
+        && data.keys().hasAll([
+          'ownerUid', 'id', 'namaSekolah', 'periode', 'tanggalPenilaian',
+          'penilai', 'peranPenilai', 'programId', 'scores', 'totalSkorPerolehan',
+          'totalSkorMaksimal', 'nilaiAkhir', 'kategoriHasil', 'temuanMonitoring',
+          'kekuatan', 'kelemahan', 'rekomendasi', 'rencanaTindakLanjut',
+          'catatanPembinaanPengawas', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'id', 'namaSekolah', 'periode', 'tanggalPenilaian',
+          'penilai', 'peranPenilai', 'programId', 'scores', 'totalSkorPerolehan',
+          'totalSkorMaksimal', 'nilaiAkhir', 'kategoriHasil', 'temuanMonitoring',
+          'kekuatan', 'kelemahan', 'rekomendasi', 'rencanaTindakLanjut',
+          'catatanPembinaanPengawas', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.ownerUid)
+        && data.id == evaluationId
+        && isValidId(data.id)
+        && isBoundedString(data.namaSekolah, 1, 200)
+        && isBoundedString(data.periode, 1, 120)
+        && isBoundedString(data.tanggalPenilaian, 1, 30)
+        && isBoundedString(data.penilai, 1, 150)
+        && isBoundedString(data.peranPenilai, 1, 20)
+        && data.peranPenilai == 'PENGAWAS'
+        && isValidOptionalId(data.programId)
+        && isValidScoresMap(data.scores)
+        && data.totalSkorPerolehan is int
+        && data.totalSkorPerolehan == scoresSum(data.scores)
+        && data.totalSkorMaksimal is int
+        && data.totalSkorMaksimal == 40
+        && data.nilaiAkhir is number
+        && data.nilaiAkhir >= 25
+        && data.nilaiAkhir <= 100
+        && isBoundedString(data.kategoriHasil, 1, 40)
+        && data.kategoriHasil in ['Sangat Baik', 'Baik', 'Cukup', 'Perlu Pembinaan Intensif']
+        && isBoundedString(data.temuanMonitoring, 0, 2500)
+        && isBoundedString(data.kekuatan, 0, 2500)
+        && isBoundedString(data.kelemahan, 0, 2500)
+        && isBoundedString(data.rekomendasi, 0, 2500)
+        && isBoundedString(data.rencanaTindakLanjut, 0, 2500)
+        && isBoundedString(data.catatanPembinaanPengawas, 0, 2500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSupervisorNote(data, noteId) {
+      return isVerifiedUser()
+        && data.keys().hasAll([
+          'ownerUid', 'id', 'namaSekolah', 'targetType', 'targetId',
+          'tanggal', 'pengawasNama', 'catatanPembinaan', 'rekomendasi',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'id', 'namaSekolah', 'targetType', 'targetId',
+          'tanggal', 'pengawasNama', 'catatanPembinaan', 'rekomendasi',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.ownerUid)
+        && data.id == noteId
+        && isValidId(data.id)
+        && isBoundedString(data.namaSekolah, 1, 200)
+        && isBoundedString(data.targetType, 1, 20)
+        && data.targetType in ['SEKOLAH', 'PROGRAM', 'EVALUASI']
+        && isValidOptionalId(data.targetId)
+        && isBoundedString(data.tanggal, 1, 30)
+        && isBoundedString(data.pengawasNama, 1, 150)
+        && isBoundedString(data.catatanPembinaan, 1, 2500)
+        && isBoundedString(data.rekomendasi, 0, 2500)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAiAnalysis(data, analysisId) {
+      return isVerifiedUser()
+        && data.keys().hasAll([
+          'ownerUid', 'id', 'namaSekolah', 'schoolScope', 'focusPrompt',
+          'generatedAt', 'executiveSummary', 'maturityScore', 'maturityLevel',
+          'overallImpactIndex', 'budgetEfficiencyNote', 'studentOutcomeNarrative',
+          'detailsJson', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid', 'id', 'namaSekolah', 'schoolScope', 'focusPrompt',
+          'generatedAt', 'executiveSummary', 'maturityScore', 'maturityLevel',
+          'overallImpactIndex', 'budgetEfficiencyNote', 'studentOutcomeNarrative',
+          'detailsJson', 'createdAt', 'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.ownerUid)
+        && data.id == analysisId
+        && isValidId(data.id)
+        && isBoundedString(data.namaSekolah, 0, 200)
+        && isBoundedString(data.schoolScope, 1, 250)
+        && isBoundedString(data.focusPrompt, 0, 500)
+        && isBoundedString(data.generatedAt, 1, 40)
+        && isBoundedString(data.executiveSummary, 0, 2000)
+        && data.maturityScore is number
+        && data.maturityScore >= 0
+        && data.maturityScore <= 100
+        && isBoundedString(data.maturityLevel, 1, 30)
+        && data.maturityLevel in ['Rintisan', 'Berkembang', 'Berdaya', 'Unggul']
+        && data.overallImpactIndex is number
+        && data.overallImpactIndex >= 0
+        && data.overallImpactIndex <= 100
+        && isBoundedString(data.budgetEfficiencyNote, 0, 1200)
+        && isBoundedString(data.studentOutcomeNarrative, 0, 1200)
+        && isBoundedString(data.detailsJson, 2, 35000)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // 4. Collection Rules (PII-Isolated & Zero-Trust)
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidUserProfile(incoming())
+        && isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && existing().ownerUid == request.auth.uid
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'namaPengawas', 'nip', 'email', 'photoURL', 'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+
+    match /schoolProfiles/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidSchoolProfile(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidSchoolProfile(incoming())
+        && isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && existing().ownerUid == request.auth.uid
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'namaSekolah', 'npsn', 'kepalaSekolah', 'nipKepalaSekolah',
+          'namaPengawas', 'nipPengawas', 'alamatSekolah', 'tahunAjaran',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+
+    match /partners/{partnerDocId} {
+      allow get: if isVerifiedUser()
+        && isValidId(partnerDocId)
+        && existing().ownerUid == request.auth.uid;
+      allow list: if isVerifiedUser()
+        && existing().ownerUid == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(partnerDocId)
+        && isValidPartner(incoming(), partnerDocId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidPartner(incoming(), partnerDocId)
+        && isVerifiedUser()
+        && isValidId(partnerDocId)
+        && existing().ownerUid == request.auth.uid
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'namaSekolah', 'nama', 'kategori', 'penanggungJawab', 'telepon',
+          'alamat', 'jenisKontribusi', 'potensiKerjaSama', 'status',
+          'catatan', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedUser()
+        && isValidId(partnerDocId)
+        && existing().ownerUid == request.auth.uid;
+    }
+
+    match /programs/{programId} {
+      allow get: if isVerifiedUser()
+        && isValidId(programId)
+        && existing().ownerUid == request.auth.uid;
+      allow list: if isVerifiedUser()
+        && existing().ownerUid == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(programId)
+        && isValidProgram(incoming(), programId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidProgram(incoming(), programId)
+        && isVerifiedUser()
+        && isValidId(programId)
+        && existing().ownerUid == request.auth.uid
+        && existing().status != 'Dibatalkan'
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: Update full program details
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'namaSekolah', 'kodeProgram', 'namaProgram', 'latarBelakang',
+            'tujuan', 'areaPm', 'partnerIds', 'sasaran', 'bentukKontribusi',
+            'strategiPelaksanaan', 'waktuPelaksanaan', 'penanggungJawab',
+            'sumberPembiayaan', 'anggaranRencana', 'indikatorKeberhasilan',
+            'targetHasil', 'status', 'updatedAt'
+          ])
+          ||
+          // Action: Sync partnerIds cleanup when deleting a partner
+          incoming().diff(existing()).affectedKeys().hasOnly(['partnerIds', 'updatedAt'])
+        );
+      allow delete: if isVerifiedUser()
+        && isValidId(programId)
+        && existing().ownerUid == request.auth.uid;
+    }
+
+    match /activities/{activityId} {
+      allow get: if isVerifiedUser()
+        && isValidId(activityId)
+        && existing().ownerUid == request.auth.uid;
+      allow list: if isVerifiedUser()
+        && existing().ownerUid == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(activityId)
+        && isValidActivity(incoming(), activityId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && ownsProgram(incoming().programId);
+      allow update: if isValidActivity(incoming(), activityId)
+        && isVerifiedUser()
+        && isValidId(activityId)
+        && existing().ownerUid == request.auth.uid
+        && existing().status != 'Selesai'
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: Mark activity complete
+          (incoming().status == 'Selesai'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+          ||
+          // Action: Sync partnerIds cleanup when deleting a partner
+          incoming().diff(existing()).affectedKeys().hasOnly(['partnerIds', 'updatedAt'])
+          ||
+          // Action: Update activity details (with parent program ownership check if programId changed)
+          (incoming().diff(existing()).affectedKeys().hasOnly([
+            'namaSekolah', 'namaKegiatan', 'programId', 'tanggalPelaksanaan',
+            'lokasi', 'partnerIds', 'penanggungJawab', 'jumlahPeserta',
+            'deskripsiPelaksanaan', 'hasilKegiatan', 'kendala', 'status', 'updatedAt'
+          ]) && (incoming().programId == existing().programId || ownsProgram(incoming().programId)))
+        );
+      allow delete: if isVerifiedUser()
+        && isValidId(activityId)
+        && existing().ownerUid == request.auth.uid;
+    }
+
+    match /evidences/{evidenceId} {
+      allow get: if isVerifiedUser()
+        && isValidId(evidenceId)
+        && existing().ownerUid == request.auth.uid;
+      allow list: if isVerifiedUser()
+        && existing().ownerUid == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(evidenceId)
+        && isValidEvidence(incoming(), evidenceId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && ownsProgram(incoming().programId)
+        && (incoming().activityId == '' || ownsActivity(incoming().activityId));
+      allow update: if isValidEvidence(incoming(), evidenceId)
+        && isVerifiedUser()
+        && isValidId(evidenceId)
+        && existing().ownerUid == request.auth.uid
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: Detach activityId when deleting an activity
+          (incoming().activityId == ''
+            && incoming().diff(existing()).affectedKeys().hasOnly(['activityId', 'updatedAt']))
+          ||
+          // Action: Update evidence metadata or attachment
+          (incoming().diff(existing()).affectedKeys().hasOnly([
+            'namaSekolah', 'namaDokumen', 'jenis', 'programId', 'activityId',
+            'tanggalUnggah', 'keterangan', 'fileUrl', 'fileName', 'fileMimeType',
+            'fileSize', 'updatedAt'
+          ])
+          && (incoming().programId == existing().programId || ownsProgram(incoming().programId))
+          && (incoming().activityId == '' || incoming().activityId == existing().activityId || ownsActivity(incoming().activityId)))
+        );
+      allow delete: if isVerifiedUser()
+        && isValidId(evidenceId)
+        && existing().ownerUid == request.auth.uid;
+    }
+
+    match /evaluations/{evaluationId} {
+      allow get: if isVerifiedUser()
+        && isValidId(evaluationId)
+        && existing().ownerUid == request.auth.uid;
+      allow list: if isVerifiedUser()
+        && existing().ownerUid == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(evaluationId)
+        && isValidEvaluation(incoming(), evaluationId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (incoming().programId == '' || ownsProgram(incoming().programId));
+      allow update: if isValidEvaluation(incoming(), evaluationId)
+        && isVerifiedUser()
+        && isValidId(evaluationId)
+        && existing().ownerUid == request.auth.uid
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: Add/update catatan pembinaan pengawas only
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'catatanPembinaanPengawas', 'updatedAt'
+          ])
+          ||
+          // Action: Update evaluation details
+          (incoming().diff(existing()).affectedKeys().hasOnly([
+            'namaSekolah', 'periode', 'tanggalPenilaian', 'penilai', 'programId',
+            'scores', 'totalSkorPerolehan', 'totalSkorMaksimal', 'nilaiAkhir',
+            'kategoriHasil', 'temuanMonitoring', 'kekuatan', 'kelemahan',
+            'rekomendasi', 'rencanaTindakLanjut', 'catatanPembinaanPengawas', 'updatedAt'
+          ]) && (incoming().programId == '' || incoming().programId == existing().programId || ownsProgram(incoming().programId)))
+        );
+      allow delete: if isVerifiedUser()
+        && isValidId(evaluationId)
+        && existing().ownerUid == request.auth.uid;
+    }
+
+    match /supervisorNotes/{noteId} {
+      allow get: if isVerifiedUser()
+        && isValidId(noteId)
+        && existing().ownerUid == request.auth.uid;
+      allow list: if isVerifiedUser()
+        && existing().ownerUid == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(noteId)
+        && isValidSupervisorNote(incoming(), noteId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (incoming().targetType == 'SEKOLAH' && incoming().targetId == '')
+          || (incoming().targetType == 'PROGRAM' && ownsProgram(incoming().targetId))
+          || (incoming().targetType == 'EVALUASI' && ownsEvaluation(incoming().targetId))
+        );
+      allow update: if isValidSupervisorNote(incoming(), noteId)
+        && isVerifiedUser()
+        && isValidId(noteId)
+        && existing().ownerUid == request.auth.uid
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().id == existing().id
+        && incoming().targetType == existing().targetType
+        && incoming().targetId == existing().targetId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'namaSekolah', 'tanggal', 'pengawasNama', 'catatanPembinaan',
+          'rekomendasi', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedUser()
+        && isValidId(noteId)
+        && existing().ownerUid == request.auth.uid;
+    }
+
+    match /aiAnalyses/{analysisId} {
+      allow get: if isVerifiedUser()
+        && isValidId(analysisId)
+        && existing().ownerUid == request.auth.uid;
+      allow list: if isVerifiedUser()
+        && existing().ownerUid == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(analysisId)
+        && isValidAiAnalysis(incoming(), analysisId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidAiAnalysis(incoming(), analysisId)
+        && isVerifiedUser()
+        && isValidId(analysisId)
+        && existing().ownerUid == request.auth.uid
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'namaSekolah', 'schoolScope', 'focusPrompt', 'generatedAt',
+          'executiveSummary', 'maturityScore', 'maturityLevel',
+          'overallImpactIndex', 'budgetEfficiencyNote', 'studentOutcomeNarrative',
+          'detailsJson', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedUser()
+        && isValidId(analysisId)
+        && existing().ownerUid == request.auth.uid;
+    }
+  }
+}

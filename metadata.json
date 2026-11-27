@@ -1,0 +1,8 @@
+{
+  "name": "MITRA KITA",
+  "description": "Sistem digital pengelolaan kemitraan sekolah untuk mendukung Pembelajaran Mendalam — Bersama Membangun Ekosistem Pembelajaran.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

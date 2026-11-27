@@ -1,0 +1,853 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil Pengawas Sekolah yang masuk menggunakan akun Google.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "UID Firebase Auth milik Pengawas Sekolah."
+        },
+        "namaPengawas": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150,
+          "description": "Nama lengkap Pengawas Sekolah."
+        },
+        "nip": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "NIP atau ID Pengawas Sekolah."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200,
+          "description": "Alamat email akun Google Pengawas."
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "URL foto profil Google."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp saat profil dibuat."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp saat profil terakhir diperbarui."
+        }
+      },
+      "required": [
+        "ownerUid",
+        "namaPengawas",
+        "nip",
+        "email",
+        "photoURL",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SchoolProfile": {
+      "title": "SchoolProfile",
+      "description": "Identitas satuan pendidikan binaan utama untuk kop laporan.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "namaSekolah": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "npsn": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "kepalaSekolah": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "nipKepalaSekolah": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "NIP Kepala Sekolah penanda tangan laporan."
+        },
+        "namaPengawas": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "nipPengawas": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "NIP Pengawas Sekolah penanda tangan laporan."
+        },
+        "alamatSekolah": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "tahunAjaran": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "namaSekolah",
+        "npsn",
+        "kepalaSekolah",
+        "namaPengawas",
+        "alamatSekolah",
+        "tahunAjaran",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Partner": {
+      "title": "Partner",
+      "description": "Data mitra sekolah binaan beserta kontak dan potensi kerja sama.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "namaSekolah": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "nama": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "kategori": {
+          "type": "string",
+          "enum": [
+            "Orang Tua",
+            "Komite Sekolah",
+            "Puskesmas",
+            "UMKM",
+            "Dunia Usaha",
+            "Pemerintah Desa/Kelurahan",
+            "Perguruan Tinggi",
+            "Komunitas Pendidikan",
+            "Organisasi Masyarakat",
+            "Lainnya"
+          ]
+        },
+        "penanggungJawab": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "telepon": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "alamat": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "jenisKontribusi": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "potensiKerjaSama": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Aktif", "Dalam Penjajakan", "Tidak Aktif"]
+        },
+        "catatan": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "id",
+        "namaSekolah",
+        "nama",
+        "kategori",
+        "penanggungJawab",
+        "telepon",
+        "alamat",
+        "jenisKontribusi",
+        "potensiKerjaSama",
+        "status",
+        "catatan",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PartnershipProgram": {
+      "title": "PartnershipProgram",
+      "description": "Program kemitraan sekolah yang mendukung empat area Pembelajaran Mendalam.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "namaSekolah": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "kodeProgram": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "namaProgram": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "latarBelakang": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "tujuan": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "areaPm": {
+          "type": "string",
+          "enum": [
+            "Praktik Pedagogis",
+            "Lingkungan Belajar",
+            "Pemanfaatan Digital",
+            "Kemitraan Pembelajaran"
+          ]
+        },
+        "partnerIds": {
+          "type": "array",
+          "description": "Daftar ID mitra yang terlibat (maksimal 50)."
+        },
+        "sasaran": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "bentukKontribusi": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "strategiPelaksanaan": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "waktuPelaksanaan": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "penanggungJawab": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "sumberPembiayaan": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "anggaranRencana": {
+          "type": "number"
+        },
+        "indikatorKeberhasilan": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "targetHasil": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "Direncanakan",
+            "Sedang Berjalan",
+            "Selesai",
+            "Ditunda",
+            "Dibatalkan"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "id",
+        "namaSekolah",
+        "kodeProgram",
+        "namaProgram",
+        "latarBelakang",
+        "tujuan",
+        "areaPm",
+        "partnerIds",
+        "sasaran",
+        "bentukKontribusi",
+        "strategiPelaksanaan",
+        "waktuPelaksanaan",
+        "penanggungJawab",
+        "sumberPembiayaan",
+        "anggaranRencana",
+        "indikatorKeberhasilan",
+        "targetHasil",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PartnershipActivity": {
+      "title": "PartnershipActivity",
+      "description": "Realisasi kegiatan kemitraan yang terhubung ke satu program.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "namaSekolah": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "namaKegiatan": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "programId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "tanggalPelaksanaan": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "lokasi": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "partnerIds": {
+          "type": "array",
+          "description": "Daftar ID mitra yang terlibat (maksimal 50)."
+        },
+        "penanggungJawab": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "jumlahPeserta": {
+          "type": "number"
+        },
+        "deskripsiPelaksanaan": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "hasilKegiatan": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "kendala": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Terjadwal", "Sedang Berlangsung", "Selesai", "Tertunda"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "id",
+        "namaSekolah",
+        "namaKegiatan",
+        "programId",
+        "tanggalPelaksanaan",
+        "lokasi",
+        "partnerIds",
+        "penanggungJawab",
+        "jumlahPeserta",
+        "deskripsiPelaksanaan",
+        "hasilKegiatan",
+        "kendala",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "EvidenceItem": {
+      "title": "EvidenceItem",
+      "description": "Bukti dan dokumentasi pelaksanaan kemitraan (dibatasi aman di bawah 1MB).",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "namaSekolah": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "namaDokumen": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "jenis": {
+          "type": "string",
+          "enum": [
+            "Foto Kegiatan",
+            "Dokumen Kerja Sama",
+            "Daftar Hadir",
+            "Notulen",
+            "Laporan Kegiatan",
+            "Dokumen Pendukung Lainnya"
+          ]
+        },
+        "programId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "activityId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "tanggalUnggah": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "keterangan": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "fileUrl": {
+          "type": "string",
+          "maxLength": 700000
+        },
+        "fileName": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "fileMimeType": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "fileSize": {
+          "type": "number"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "id",
+        "namaSekolah",
+        "namaDokumen",
+        "jenis",
+        "programId",
+        "activityId",
+        "tanggalUnggah",
+        "keterangan",
+        "fileUrl",
+        "fileName",
+        "fileMimeType",
+        "fileSize",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "MonitoringEvaluation": {
+      "title": "MonitoringEvaluation",
+      "description": "Instrumen monitoring dan evaluasi kemitraan 10 indikator dengan skala 1-4.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "namaSekolah": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "periode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "tanggalPenilaian": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "penilai": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "peranPenilai": {
+          "type": "string",
+          "enum": ["PENGAWAS"]
+        },
+        "programId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "scores": {
+          "type": "object",
+          "description": "Peta skor 10 indikator (ind_1 sampai ind_10) dengan nilai integer 1 sampai 4."
+        },
+        "totalSkorPerolehan": {
+          "type": "number"
+        },
+        "totalSkorMaksimal": {
+          "type": "number"
+        },
+        "nilaiAkhir": {
+          "type": "number"
+        },
+        "kategoriHasil": {
+          "type": "string",
+          "enum": [
+            "Sangat Baik",
+            "Baik",
+            "Cukup",
+            "Perlu Pembinaan Intensif"
+          ]
+        },
+        "temuanMonitoring": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "kekuatan": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "kelemahan": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "rekomendasi": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "rencanaTindakLanjut": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "catatanPembinaanPengawas": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "id",
+        "namaSekolah",
+        "periode",
+        "tanggalPenilaian",
+        "penilai",
+        "peranPenilai",
+        "programId",
+        "scores",
+        "totalSkorPerolehan",
+        "totalSkorMaksimal",
+        "nilaiAkhir",
+        "kategoriHasil",
+        "temuanMonitoring",
+        "kekuatan",
+        "kelemahan",
+        "rekomendasi",
+        "rencanaTindakLanjut",
+        "catatanPembinaanPengawas",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SupervisorNote": {
+      "title": "SupervisorNote",
+      "description": "Catatan pembinaan dan rekomendasi Pengawas Sekolah.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "namaSekolah": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "targetType": {
+          "type": "string",
+          "enum": ["SEKOLAH", "PROGRAM", "EVALUASI"]
+        },
+        "targetId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "tanggal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "pengawasNama": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "catatanPembinaan": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2500
+        },
+        "rekomendasi": {
+          "type": "string",
+          "maxLength": 2500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "id",
+        "namaSekolah",
+        "targetType",
+        "targetId",
+        "tanggal",
+        "pengawasNama",
+        "catatanPembinaan",
+        "rekomendasi",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AiAnalysisRecord": {
+      "title": "AiAnalysisRecord",
+      "description": "Riwayat hasil Analisis AI, Rekomendasi Kemitraan, dan Analisis Dampak per akun Pengawas Sekolah.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "namaSekolah": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "schoolScope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 250
+        },
+        "focusPrompt": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "generatedAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "executiveSummary": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "maturityScore": {
+          "type": "number"
+        },
+        "maturityLevel": {
+          "type": "string",
+          "enum": ["Rintisan", "Berkembang", "Berdaya", "Unggul"]
+        },
+        "overallImpactIndex": {
+          "type": "number"
+        },
+        "budgetEfficiencyNote": {
+          "type": "string",
+          "maxLength": 1200
+        },
+        "studentOutcomeNarrative": {
+          "type": "string",
+          "maxLength": 1200
+        },
+        "detailsJson": {
+          "type": "string",
+          "maxLength": 35000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerUid",
+        "id",
+        "namaSekolah",
+        "schoolScope",
+        "focusPrompt",
+        "generatedAt",
+        "executiveSummary",
+        "maturityScore",
+        "maturityLevel",
+        "overallImpactIndex",
+        "budgetEfficiencyNote",
+        "studentOutcomeNarrative",
+        "detailsJson",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Profil Pengawas Sekolah terisolasi per UID pengguna."
+    },
+    "/schoolProfiles/{userId}": {
+      "schema": { "$ref": "#/entities/SchoolProfile" },
+      "description": "Profil satuan pendidikan binaan utama milik Pengawas."
+    },
+    "/partners/{partnerDocId}": {
+      "schema": { "$ref": "#/entities/Partner" },
+      "description": "Koleksi data mitra sekolah milik masing-masing Pengawas."
+    },
+    "/programs/{programId}": {
+      "schema": { "$ref": "#/entities/PartnershipProgram" },
+      "description": "Koleksi program kemitraan sekolah milik masing-masing Pengawas."
+    },
+    "/activities/{activityId}": {
+      "schema": { "$ref": "#/entities/PartnershipActivity" },
+      "description": "Koleksi kegiatan kemitraan yang berelasi dengan program milik Pengawas."
+    },
+    "/evidences/{evidenceId}": {
+      "schema": { "$ref": "#/entities/EvidenceItem" },
+      "description": "Koleksi bukti dan dokumentasi kegiatan yang berelasi dengan program milik Pengawas."
+    },
+    "/evaluations/{evaluationId}": {
+      "schema": { "$ref": "#/entities/MonitoringEvaluation" },
+      "description": "Koleksi hasil monitoring dan evaluasi 10 indikator milik Pengawas."
+    },
+    "/supervisorNotes/{noteId}": {
+      "schema": { "$ref": "#/entities/SupervisorNote" },
+      "description": "Koleksi catatan pembinaan dan rekomendasi Pengawas Sekolah."
+    },
+    "/aiAnalyses/{analysisId}": {
+      "schema": { "$ref": "#/entities/AiAnalysisRecord" },
+      "description": "Koleksi riwayat Analisis AI, rekomendasi kemitraan, dan analisis dampak milik Pengawas."
+    }
+  }
+}
