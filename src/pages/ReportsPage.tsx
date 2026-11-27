@@ -240,11 +240,16 @@ export const ReportsPage: React.FC = () => {
     const list = dataset.aiAnalyses ?? [];
     if (list.length === 0) return null;
     if (schoolFilter === 'ALL') {
-      return list[0] ?? null;
+      return (
+        list.find((a) => !(a.namaSekolah || '').trim()) ?? list[0] ?? null
+      );
     }
+    const targetKey = schoolFilter.trim().toLowerCase();
     return (
-      list.find((a) => a.namaSekolah === schoolFilter) ??
-      list.find((a) => !a.namaSekolah) ??
+      list.find(
+        (a) => (a.namaSekolah || '').trim().toLowerCase() === targetKey
+      ) ??
+      list.find((a) => !(a.namaSekolah || '').trim()) ??
       null
     );
   }, [dataset.aiAnalyses, schoolFilter]);

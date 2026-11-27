@@ -130,47 +130,108 @@ export const AiAnalysisPage: React.FC<AiAnalysisPageProps> = ({
   const [savedCoachingNote, setSavedCoachingNote] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
 
-  // Sync selectedAnalysisId to latest saved record in Firestore if available
+  const normalizeSchoolKey = (name?: string) =>
+    (name || '').trim().toLowerCase();
+
+  const matchesSchoolScope = (item: SavedAiAnalysis, filter: string) => {
+    const savedKey = normalizeSchoolKey(item.namaSekolah);
+    if (filter === 'ALL') return savedKey === '';
+    return savedKey === normalizeSchoolKey(filter);
+  };
+
+  // Analyses matching the currently selected Cakupan Sekolah Analisis
+  const scopedAnalyses = useMemo(
+    () =>
+      dataset.aiAnalyses.filter((item) =>
+        matchesSchoolScope(item, schoolFilter)
+      ),
+    [dataset.aiAnalyses, schoolFilter]
+  );
+
+  // Set of normalized school names that already have at least one saved AI analysis
+  const analyzedSchoolKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const item of dataset.aiAnalyses) {
+      keys.add(normalizeSchoolKey(item.namaSekolah));
+    }
+    return keys;
+  }, [dataset.aiAnalyses]);
+
+  // Keep selectedAnalysisId synchronized strictly to the currently selected school scope
   useEffect(() => {
-    if (dataset.aiAnalyses.length === 0) {
-      setSelectedAnalysisId(null);
+    if (scopedAnalyses.length === 0) {
+      if (selectedAnalysisId !== null) {
+        setSelectedAnalysisId(null);
+      }
       return;
     }
     if (
       !selectedAnalysisId ||
-      !dataset.aiAnalyses.some((a) => a.id === selectedAnalysisId)
+      !scopedAnalyses.some((a) => a.id === selectedAnalysisId)
     ) {
-      setSelectedAnalysisId(dataset.aiAnalyses[0].id);
+      setSelectedAnalysisId(scopedAnalyses[0].id);
     }
-  }, [dataset.aiAnalyses, selectedAnalysisId]);
+  }, [scopedAnalyses, selectedAnalysisId]);
 
   const activeSavedAnalysis: SavedAiAnalysis | null = useMemo(() => {
-    if (!selectedAnalysisId) return dataset.aiAnalyses[0] ?? null;
+    if (scopedAnalyses.length === 0) return null;
+    if (!selectedAnalysisId) return scopedAnalyses[0] ?? null;
     return (
-      dataset.aiAnalyses.find((a) => a.id === selectedAnalysisId) ??
-      dataset.aiAnalyses[0] ??
+      scopedAnalyses.find((a) => a.id === selectedAnalysisId) ??
+      scopedAnalyses[0] ??
       null
     );
-  }, [dataset.aiAnalyses, selectedAnalysisId]);
+  }, [scopedAnalyses, selectedAnalysisId]);
 
   const result: PartnershipAiAnalysisResult | null =
     transientResult ?? activeSavedAnalysis;
 
-  // Scoped dataset slice
+  const handleSchoolFilterChange = (nextFilter: string) => {
+    setSchoolFilter(nextFilter);
+    setTransientResult(null);
+    setErrorMsg('');
+    setSavedPartnerIndexes(new Set());
+    setSavedProgramIndexes(new Set());
+    setSavedCoachingNote(false);
+    const matching = dataset.aiAnalyses.find((item) =>
+      matchesSchoolScope(item, nextFilter)
+    );
+    setSelectedAnalysisId(matching ? matching.id : null);
+  };
+
+  // Scoped dataset slice (case-insensitive & includes linked activities/evidences/evaluations by programId)
   const scopedData = useMemo(() => {
+    const targetKey = normalizeSchoolKey(schoolFilter);
     const matchSchool = (name?: string) =>
-      schoolFilter === 'ALL' || (name || '') === schoolFilter;
+      schoolFilter === 'ALL' || normalizeSchoolKey(name) === targetKey;
 
     const partners = dataset.partners.filter((p) => matchSchool(p.namaSekolah));
     const programs = dataset.programs.filter((p) => matchSchool(p.namaSekolah));
-    const activities = dataset.activities.filter((a) =>
-      matchSchool(a.namaSekolah)
+    const scopedProgramIds = new Set(programs.map((p) => p.id));
+
+    const activities = dataset.activities.filter(
+      (a) =>
+        matchSchool(a.namaSekolah) ||
+        (schoolFilter !== 'ALL' &&
+          !a.namaSekolah &&
+          scopedProgramIds.has(a.programId))
     );
-    const evidences = dataset.evidences.filter((e) =>
-      matchSchool(e.namaSekolah)
+    const scopedActivityIds = new Set(activities.map((a) => a.id));
+
+    const evidences = dataset.evidences.filter(
+      (e) =>
+        matchSchool(e.namaSekolah) ||
+        (schoolFilter !== 'ALL' &&
+          !e.namaSekolah &&
+          ((e.programId ? scopedProgramIds.has(e.programId) : false) ||
+            (e.activityId ? scopedActivityIds.has(e.activityId) : false)))
     );
-    const evaluations = dataset.evaluations.filter((e) =>
-      matchSchool(e.namaSekolah)
+    const evaluations = dataset.evaluations.filter(
+      (e) =>
+        matchSchool(e.namaSekolah) ||
+        (schoolFilter !== 'ALL' &&
+          !e.namaSekolah &&
+          (e.programId ? scopedProgramIds.has(e.programId) : false))
     );
 
     const totalBudget = programs.reduce(
@@ -508,7 +569,11 @@ export const AiAnalysisPage: React.FC<AiAnalysisPageProps> = ({
           ) : (
             <>
               <Sparkles className="h-4 w-4" />
-              <span>Jalankan Analisis AI</span>
+              <span>
+                {schoolFilter === 'ALL'
+                  ? 'Jalankan Analisis AI'
+                  : 'Analisis Sekolah Ini'}
+              </span>
             </>
           )}
         </button>
@@ -572,18 +637,25 @@ export const AiAnalysisPage: React.FC<AiAnalysisPageProps> = ({
             </label>
             <select
               value={schoolFilter}
-              onChange={(e) => setSchoolFilter(e.target.value)}
+              onChange={(e) => handleSchoolFilterChange(e.target.value)}
               disabled={loading}
               className="w-full rounded-xl border border-[#D4E0D9] bg-[#FAFDFB] px-3.5 py-2.5 text-sm text-[#11221A] focus:border-[#14532D] focus:bg-white focus:outline-none"
             >
               <option value="ALL">
                 Semua Sekolah Binaan ({schoolNameSuggestions.length || 1})
+                {analyzedSchoolKeys.has('') ? ' · Sudah Dianalisis' : ''}
               </option>
-              {schoolNameSuggestions.map((school) => (
-                <option key={school} value={school}>
-                  {school}
-                </option>
-              ))}
+              {schoolNameSuggestions.map((school) => {
+                const hasSaved = analyzedSchoolKeys.has(
+                  normalizeSchoolKey(school)
+                );
+                return (
+                  <option key={school} value={school}>
+                    {school}
+                    {hasSaved ? ' · Sudah Dianalisis' : ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -638,26 +710,71 @@ export const AiAnalysisPage: React.FC<AiAnalysisPageProps> = ({
             <div className="flex flex-wrap items-center gap-2 text-xs text-[#4A5E54]">
               <History className="h-3.5 w-3.5 text-[#14532D]" />
               <span className="font-semibold text-[#11221A]">
-                Riwayat Tersimpan ({dataset.aiAnalyses.length}):
+                Riwayat Tersimpan ({scopedAnalyses.length} pada cakupan ini ·{' '}
+                {dataset.aiAnalyses.length} total):
               </span>
               <select
                 value={activeSavedAnalysis?.id ?? ''}
                 onChange={(e) => {
+                  const chosenId = e.target.value;
+                  if (!chosenId) return;
+                  const chosen = dataset.aiAnalyses.find(
+                    (a) => a.id === chosenId
+                  );
                   setTransientResult(null);
-                  setSelectedAnalysisId(e.target.value);
+                  setErrorMsg('');
                   setSavedPartnerIndexes(new Set());
                   setSavedProgramIndexes(new Set());
                   setSavedCoachingNote(false);
+                  if (chosen) {
+                    const targetSchool = (chosen.namaSekolah || '').trim();
+                    setSchoolFilter(targetSchool || 'ALL');
+                  }
+                  setSelectedAnalysisId(chosenId);
                 }}
-                className="rounded-lg border border-[#D4E0D9] bg-[#FAFDFB] px-2.5 py-1.5 text-xs font-medium text-[#11221A] focus:border-[#14532D] focus:outline-none"
+                className="max-w-full rounded-lg border border-[#D4E0D9] bg-[#FAFDFB] px-2.5 py-1.5 text-xs font-medium text-[#11221A] focus:border-[#14532D] focus:outline-none"
               >
-                {dataset.aiAnalyses.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {formatDateID(item.generatedAt.slice(0, 10))} ·{' '}
-                    {item.schoolScope} (Skor {item.maturityScore}/100 · Dampak{' '}
-                    {item.impactAnalysis.overallImpactIndex}/100)
+                {!activeSavedAnalysis && (
+                  <option value="">
+                    Belum ada riwayat untuk{' '}
+                    {schoolFilter === 'ALL'
+                      ? 'Semua Sekolah Binaan'
+                      : schoolFilter}{' '}
+                    — pilih riwayat lain atau jalankan analisis
                   </option>
-                ))}
+                )}
+                {scopedAnalyses.length > 0 && (
+                  <optgroup
+                    label={
+                      schoolFilter === 'ALL'
+                        ? 'Cakupan Semua Sekolah Binaan'
+                        : `Khusus ${schoolFilter}`
+                    }
+                  >
+                    {scopedAnalyses.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {formatDateID(item.generatedAt.slice(0, 10))} ·{' '}
+                        {item.schoolScope} (Skor {item.maturityScore}/100 ·
+                        Dampak {item.impactAnalysis.overallImpactIndex}/100)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {dataset.aiAnalyses.some(
+                  (item) => !matchesSchoolScope(item, schoolFilter)
+                ) && (
+                  <optgroup label="Riwayat Cakupan Sekolah Lainnya">
+                    {dataset.aiAnalyses
+                      .filter((item) => !matchesSchoolScope(item, schoolFilter))
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {formatDateID(item.generatedAt.slice(0, 10))} ·{' '}
+                          {item.schoolScope} (Skor {item.maturityScore}/100 ·
+                          Dampak {item.impactAnalysis.overallImpactIndex}/100)
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
               </select>
             </div>
             {activeSavedAnalysis && (
@@ -677,20 +794,54 @@ export const AiAnalysisPage: React.FC<AiAnalysisPageProps> = ({
         )}
       </div>
 
-      {/* Empty State Before First Run */}
+      {/* Empty State Before Run for Selected Scope */}
       {!result && !loading && (
         <div className="rounded-2xl border border-[#DFE8E2] bg-white p-8 text-center shadow-[0_1px_3px_rgba(16,38,26,0.04)] sm:p-10">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EDF6F0] text-[#14532D]">
             <Sparkles className="h-6 w-6" />
           </div>
           <h3 className="mt-4 text-lg font-bold text-[#11221A]">
-            Siap Menganalisis Ekosistem Kemitraan Sekolah
+            {schoolFilter === 'ALL'
+              ? 'Siap Menganalisis Ekosistem Kemitraan Sekolah'
+              : `Belum Ada Analisis AI Khusus untuk ${schoolFilter}`}
           </h3>
           <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-[#5B6F65]">
-            AI akan membaca seluruh data mitra, program kemitraan, realisasi
-            kegiatan, bukti dokumentasi, dan hasil monitoring pada cakupan
-            sekolah terpilih untuk menghasilkan tiga keluaran utama secara
-            otomatis:
+            {schoolFilter === 'ALL' ? (
+              <>
+                AI akan membaca seluruh data mitra, program kemitraan, realisasi
+                kegiatan, bukti dokumentasi, dan hasil monitoring pada cakupan
+                sekolah terpilih untuk menghasilkan tiga keluaran utama secara
+                otomatis:
+              </>
+            ) : (
+              <>
+                Data khusus{' '}
+                <strong className="text-[#11221A]">{schoolFilter}</strong> saat
+                ini memuat{' '}
+                <strong className="text-[#11221A]">
+                  {scopedData.partners.length} mitra
+                </strong>
+                ,{' '}
+                <strong className="text-[#11221A]">
+                  {scopedData.programs.length} program
+                </strong>{' '}
+                ({formatCurrencyIDR(scopedData.totalBudget)}),{' '}
+                <strong className="text-[#11221A]">
+                  {scopedData.activities.length} kegiatan
+                </strong>
+                , serta{' '}
+                <strong className="text-[#11221A]">
+                  {scopedData.evidences.length} bukti &amp;{' '}
+                  {scopedData.evaluations.length} monitoring
+                </strong>
+                . Jalankan Analisis AI agar{' '}
+                <strong className="text-[#11221A]">
+                  Rekomendasi Kemitraan Strategis
+                </strong>{' '}
+                dan <strong className="text-[#11221A]">Analisis Dampak</strong>{' '}
+                disesuaikan khusus bagi {schoolFilter}.
+              </>
+            )}
           </p>
           <div className="mx-auto mt-6 grid max-w-3xl grid-cols-1 gap-4 text-left sm:grid-cols-3">
             <div className="rounded-xl border border-[#E6EEE9] bg-[#FAFDFB] p-4">
@@ -731,7 +882,11 @@ export const AiAnalysisPage: React.FC<AiAnalysisPageProps> = ({
               className="inline-flex items-center gap-2 rounded-xl bg-[#14532D] px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-[#0E3F22]"
             >
               <Sparkles className="h-4 w-4" />
-              <span>Mulai Analisis AI Sekarang</span>
+              <span>
+                {schoolFilter === 'ALL'
+                  ? 'Mulai Analisis AI Sekarang'
+                  : `Jalankan Analisis AI untuk ${schoolFilter}`}
+              </span>
             </button>
           </div>
         </div>
@@ -944,11 +1099,14 @@ export const AiAnalysisPage: React.FC<AiAnalysisPageProps> = ({
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
                   <h3 className="text-base font-bold text-[#11221A]">
-                    Rekomendasi Kemitraan Strategis
+                    Rekomendasi Kemitraan Strategis — {result.schoolScope}
                   </h3>
                   <p className="text-xs text-[#5B6F65]">
-                    Usulan mitra &amp; kolaborasi baru berbasis celah data
-                    sekolah. Anda dapat menyimpannya langsung ke Data Mitra atau
+                    Usulan mitra &amp; kolaborasi baru berbasis celah data{' '}
+                    <span className="font-semibold text-[#11221A]">
+                      {result.schoolScope}
+                    </span>
+                    . Anda dapat menyimpannya langsung ke Data Mitra atau
                     Program Kemitraan.
                   </p>
                 </div>

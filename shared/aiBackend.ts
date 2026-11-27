@@ -1087,15 +1087,21 @@ export async function handlePartnershipAnalysis(
     const snapshot =
       body.snapshot && typeof body.snapshot === 'object' ? body.snapshot : {};
 
+    const isSingleSchool =
+      !schoolScope.toLowerCase().startsWith('semua sekolah');
     const serializedSnapshot = JSON.stringify(snapshot).slice(0, 65000);
+    const singleSchoolRule = isSingleSchool
+      ? `- FOKUS KHUSUS SATU SEKOLAH: Analisis ini KHUSUS untuk "${schoolScope}". Wajib sebutkan nama "${schoolScope}" secara eksplisit pada Ringkasan Eksekutif, setiap Rekomendasi Kemitraan Strategis (alasanStrategis, calonMitra yang kontekstual dengan wilayah/kebutuhan ${schoolScope}, bentukKolaborasi), Analisis Dampak, dan Rencana Pembinaan Pengawas. Jangan mencampur atau menggeneralisasi untuk sekolah lain.`
+      : `- Analisis ini mencakup lintas seluruh sekolah binaan; soroti perbandingan, pola kesenjangan, dan rekomendasi strategis yang berdampak luas bagi sekolah binaan.`;
+
     const prompt = `Anda adalah Konsultan Ahli Kepemimpinan Pembelajaran Mendalam dan Pengawas Sekolah Senior Indonesia pada sistem "MITRA KITA".
 
 TUGAS ANDA:
 Lakukan Analisis AI komprehensif atas data kemitraan sekolah berikut ini, lalu susun:
 1. Ringkasan Eksekutif (executiveSummary) & Skor Kematangan Ekosistem Kemitraan (maturityScore 0-100, maturityLevel: Rintisan / Berkembang / Berdaya / Unggul) beserta 3-4 kekuatan utama (keyStrengths) dan 3-4 celah prioritas (priorityGaps).
 2. Rekomendasi Kemitraan Strategis (partnershipRecommendations, 4-5 rekomendasi):
-   - Prioritaskan kategori mitra yang BELUM banyak dimanfaatkan di data sekolah (misal Puskesmas, UMKM, Perguruan Tinggi, Dunia Usaha, Pemerintah Desa/Kelurahan, Komunitas Pendidikan) serta Area PM yang porsinya masih lemah.
-   - Setiap rekomendasi harus operasional, realistis untuk satuan pendidikan di Indonesia, menyebutkan calon mitra konkret, bentuk kolaborasi, dan estimasi dampak belajar.
+   - Prioritaskan kategori mitra yang BELUM banyak dimanfaatkan pada data ${isSingleSchool ? schoolScope : 'sekolah'} (misal Puskesmas, UMKM, Perguruan Tinggi, Dunia Usaha, Pemerintah Desa/Kelurahan, Komunitas Pendidikan) serta Area PM yang porsinya masih lemah atau 0 program.
+   - Setiap rekomendasi harus operasional, realistis untuk satuan pendidikan di Indonesia, menyebutkan calon mitra konkret yang relevan dengan konteks ${isSingleSchool ? schoolScope : 'sekolah binaan'}, bentuk kolaborasi, dan estimasi dampak belajar.
 3. Analisis Dampak (impactAnalysis):
    - Berikan overallImpactIndex (0-100) yang objektif berdasarkan realisasi kegiatan, jumlah peserta, ketersediaan bukti dokumentasi, skor monitoring, dan keterlibatan mitra.
    - Evaluasi tepat 4 dimensi dampak berikut di field "dimensions":
@@ -1109,12 +1115,13 @@ Lakukan Analisis AI komprehensif atas data kemitraan sekolah berikut ini, lalu s
 KONTEKS ANALISIS:
 - Cakupan Sekolah: ${schoolScope}
 - Tahun Ajaran: ${tahunAjaran}
-- Fokus Khusus Pengawas: ${focusPrompt || 'Analisis menyeluruh ekosistem kemitraan, peluang mitra baru, dan dampak terhadap Pembelajaran Mendalam.'}
+- Fokus Khusus Pengawas: ${focusPrompt || `Analisis menyeluruh ekosistem kemitraan ${isSingleSchool ? schoolScope : 'sekolah'}, peluang mitra baru, dan dampak terhadap Pembelajaran Mendalam.`}
 
 DATA AKTUAL SEKOLAH (JSON):
 ${serializedSnapshot}
 
 ATURAN KETAT:
+${singleSchoolRule}
 - Gunakan Bahasa Indonesia formal, tajam, lugas, dan berbasis fakta dari data JSON di atas (sebutkan nama mitra/program/angka nyata yang ada di data, jangan mengarang data yang tidak ada).
 - Jika sebagian data (seperti kegiatan selesai, bukti dokumentasi, atau hasil monitoring) masih sedikit atau 0, jadikan itu temuan objektif pada skor dampak & celah prioritas.
 - Keluarkan HANYA JSON valid sesuai schema.`;
