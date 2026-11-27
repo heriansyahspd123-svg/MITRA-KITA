@@ -3,6 +3,7 @@
   "main": "cloudflare/worker.ts",
   "compatibility_date": "2025-05-01",
   "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": true,
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
