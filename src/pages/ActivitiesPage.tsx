@@ -14,6 +14,7 @@ import {
   FormFillExampleBar,
 } from '../components/FieldExampleHint';
 import { Modal } from '../components/Modal';
+import { PartnerMultiSelectWithQuickEdit } from '../components/PartnerMultiSelectWithQuickEdit';
 import { ProgramSelectWithQuickAdd } from '../components/ProgramSelectWithQuickAdd';
 import { useMitraKita } from '../context/MitraKitaContext';
 import { ACTIVITY_FIELD_EXAMPLES } from '../data/fieldExamples';
@@ -727,33 +728,21 @@ export const ActivitiesPage: React.FC<ActivitiesPageProps> = ({
             )}
           </div>
 
-          {/* Mitra Terlibat */}
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-[#14221B]">
-              Mitra yang Terlibat dalam Kegiatan
-            </label>
-            <div className="grid max-h-36 grid-cols-1 gap-2 overflow-y-auto rounded-lg border border-[#D4DDD7] p-3 sm:grid-cols-2">
-              {dataset.partners.map((partner) => {
-                const checked = form.partnerIds.includes(partner.id);
-                return (
-                  <label
-                    key={partner.id}
-                    className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs ${
-                      checked ? 'bg-[#ECFDF5] font-semibold text-[#14532D]' : 'text-[#14221B]'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => togglePartnerId(partner.id)}
-                      className="h-4 w-4 accent-[#14532D]"
-                    />
-                    <span className="truncate">{partner.nama}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
+          {/* Mitra Terlibat (Input Baru & Edit Langsung) */}
+          <PartnerMultiSelectWithQuickEdit
+            label="Mitra yang Terlibat dalam Kegiatan"
+            selectedIds={form.partnerIds}
+            onToggleId={togglePartnerId}
+            onSelectId={(partnerId) =>
+              setForm((prev) => ({
+                ...prev,
+                partnerIds: prev.partnerIds.includes(partnerId)
+                  ? prev.partnerIds
+                  : [...prev.partnerIds, partnerId],
+              }))
+            }
+            namaSekolah={form.namaSekolah}
+          />
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-[#14221B]">
