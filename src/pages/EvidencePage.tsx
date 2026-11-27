@@ -16,6 +16,7 @@ import {
   FormFillExampleBar,
 } from '../components/FieldExampleHint';
 import { Modal } from '../components/Modal';
+import { ProgramSelectWithQuickAdd } from '../components/ProgramSelectWithQuickAdd';
 import { useMitraKita } from '../context/MitraKitaContext';
 import { EVIDENCE_FIELD_EXAMPLES } from '../data/fieldExamples';
 import {
@@ -655,36 +656,22 @@ export const EvidencePage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-[#14221B]">
-                Program Kemitraan Terkait *
-              </label>
-              <select
-                value={form.programId}
-                onChange={(e) => {
-                  const prg = programMap.get(e.target.value);
-                  setForm({
-                    ...form,
-                    programId: e.target.value,
-                    namaSekolah: prg?.namaSekolah || form.namaSekolah,
-                    activityId: '',
-                  });
-                }}
-                className="w-full rounded-lg border border-[#D4DDD7] bg-white px-3 py-2 text-sm text-[#14221B] focus:border-[#14532D] focus:outline-none"
-              >
-                <option value="">— Pilih Program —</option>
-                {dataset.programs.map((prg) => (
-                  <option key={prg.id} value={prg.id}>
-                    {prg.kodeProgram} — {prg.namaProgram}
-                  </option>
-                ))}
-              </select>
-              {formErrors.programId && (
-                <p className="mt-1 text-xs text-[#B91C1C]">
-                  {formErrors.programId}
-                </p>
-              )}
-            </div>
+            <ProgramSelectWithQuickAdd
+              label="Program Kemitraan Terkait *"
+              value={form.programId}
+              onChange={(nextProgramId) => {
+                const prg = programMap.get(nextProgramId);
+                setForm({
+                  ...form,
+                  programId: nextProgramId,
+                  namaSekolah: prg?.namaSekolah || form.namaSekolah,
+                  activityId: '',
+                });
+              }}
+              namaSekolah={form.namaSekolah}
+              emptyOptionLabel="— Pilih Program —"
+              error={formErrors.programId}
+            />
             <div>
               <label className="mb-1 block text-xs font-semibold text-[#14221B]">
                 Kegiatan Terkait (Opsional)

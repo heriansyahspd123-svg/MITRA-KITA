@@ -14,6 +14,7 @@ import {
   FormFillExampleBar,
 } from '../components/FieldExampleHint';
 import { Modal } from '../components/Modal';
+import { ProgramSelectWithQuickAdd } from '../components/ProgramSelectWithQuickAdd';
 import { useMitraKita } from '../context/MitraKitaContext';
 import { ACTIVITY_FIELD_EXAMPLES } from '../data/fieldExamples';
 import {
@@ -610,28 +611,15 @@ export const ActivitiesPage: React.FC<ActivitiesPageProps> = ({
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-[#14221B]">
-                Program Terkait *
-              </label>
-              <select
-                value={form.programId}
-                onChange={(e) => handleProgramChange(e.target.value)}
-                className="w-full rounded-lg border border-[#D4DDD7] bg-white px-3 py-2 text-sm text-[#14221B] focus:border-[#14532D] focus:outline-none"
-              >
-                <option value="">— Pilih Program —</option>
-                {dataset.programs.map((prg) => (
-                  <option key={prg.id} value={prg.id}>
-                    {prg.kodeProgram} — {prg.namaProgram}
-                  </option>
-                ))}
-              </select>
-              {formErrors.programId && (
-                <p className="mt-1 text-xs text-[#B91C1C]">
-                  {formErrors.programId}
-                </p>
-              )}
-            </div>
+            <ProgramSelectWithQuickAdd
+              label="Program Terkait *"
+              value={form.programId}
+              onChange={handleProgramChange}
+              namaSekolah={form.namaSekolah}
+              penanggungJawab={form.penanggungJawab}
+              emptyOptionLabel="— Pilih Program —"
+              error={formErrors.programId}
+            />
             <div>
               <label className="mb-1 block text-xs font-semibold text-[#14221B]">
                 Status Kegiatan *

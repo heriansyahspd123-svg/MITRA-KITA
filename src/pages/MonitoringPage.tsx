@@ -12,6 +12,7 @@ import {
   FormFillExampleBar,
 } from '../components/FieldExampleHint';
 import { Modal } from '../components/Modal';
+import { ProgramSelectWithQuickAdd } from '../components/ProgramSelectWithQuickAdd';
 import { useMitraKita } from '../context/MitraKitaContext';
 import { MONITORING_FIELD_EXAMPLES } from '../data/fieldExamples';
 import {
@@ -464,31 +465,21 @@ export const MonitoringPage: React.FC = () => {
                   onApply={setPenilai}
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-[#14221B]">
-                  Cakupan Penilaian
-                </label>
-                <select
-                  value={programId}
-                  onChange={(e) => {
-                    const selected = dataset.programs.find(
-                      (p) => p.id === e.target.value
-                    );
-                    setProgramId(e.target.value);
-                    if (selected?.namaSekolah) {
-                      setNamaSekolah(selected.namaSekolah);
-                    }
-                  }}
-                  className="w-full rounded-lg border border-[#D4DDD7] bg-white px-3 py-2 text-sm text-[#14221B] focus:border-[#14532D] focus:outline-none"
-                >
-                  <option value="">Seluruh Kemitraan Sekolah</option>
-                  {dataset.programs.map((prg) => (
-                    <option key={prg.id} value={prg.id}>
-                      {prg.kodeProgram} — {prg.namaProgram}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <ProgramSelectWithQuickAdd
+                label="Cakupan Penilaian"
+                value={programId}
+                onChange={(nextProgramId) => {
+                  const selected = dataset.programs.find(
+                    (p) => p.id === nextProgramId
+                  );
+                  setProgramId(nextProgramId);
+                  if (selected?.namaSekolah) {
+                    setNamaSekolah(selected.namaSekolah);
+                  }
+                }}
+                namaSekolah={namaSekolah}
+                emptyOptionLabel="Seluruh Kemitraan Sekolah"
+              />
             </div>
           </div>
 

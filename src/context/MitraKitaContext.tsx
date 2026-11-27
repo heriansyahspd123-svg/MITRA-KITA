@@ -120,7 +120,8 @@ interface MitraKitaContextValue {
 
   // Programs CRUD
   addProgram: (
-    data: Omit<PartnershipProgram, 'id' | 'createdAt' | 'updatedAt' | 'isDemo'>
+    data: Omit<PartnershipProgram, 'id' | 'createdAt' | 'updatedAt' | 'isDemo'>,
+    onCreated?: (newId: string) => void
   ) => boolean;
   updateProgram: (
     id: string,
@@ -1336,12 +1337,15 @@ export const MitraKitaProvider: React.FC<{ children: React.ReactNode }> = ({
       data: Omit<
         PartnershipProgram,
         'id' | 'createdAt' | 'updatedAt' | 'isDemo'
-      >
+      >,
+      onCreated?: (newId: string) => void
     ) => {
       if (!firebaseUser) return false;
       const uid = firebaseUser.uid;
       const id = generateUid('prg');
       const path = `programs/${id}`;
+
+      onCreated?.(id);
 
       void (async () => {
         try {
