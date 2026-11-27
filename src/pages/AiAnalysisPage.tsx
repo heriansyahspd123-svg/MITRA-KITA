@@ -307,7 +307,9 @@ export const AiAnalysisPage: React.FC<AiAnalysisPageProps> = ({
         }),
       });
 
-      const data = await res.json();
+      const data = (await res.json().catch(() => ({}))) as Partial<
+        PartnershipAiAnalysisResult & { error?: string }
+      >;
       if (!res.ok) {
         throw new Error(
           data?.error || 'Terjadi kesalahan saat menjalankan Analisis AI.'
