@@ -9,7 +9,16 @@ interface CloudflareAssetsBinding {
 
 interface WorkerEnv {
   GEMINI_API_KEY?: string;
+  MITRAKITA_AI_KEY?: string;
   ASSETS?: CloudflareAssetsBinding;
+}
+
+function resolveWorkerApiKey(env: WorkerEnv): string | undefined {
+  const primary = typeof env.GEMINI_API_KEY === 'string' ? env.GEMINI_API_KEY.trim() : '';
+  if (primary) return primary;
+  const fallback =
+    typeof env.MITRAKITA_AI_KEY === 'string' ? env.MITRAKITA_AI_KEY.trim() : '';
+  return fallback || undefined;
 }
 
 const MAX_REQUEST_BYTES = 28 * 1024 * 1024;
@@ -74,7 +83,10 @@ export default {
       const parsed = await parseJsonBody(request);
       if (!parsed.ok) return parsed.response;
 
-      const result = await handleArkasParse(parsed.data, env.GEMINI_API_KEY);
+      const result = await handleArkasParse(
+        parsed.data,
+        resolveWorkerApiKey(env)
+      );
       return jsonResponse(result.body, result.status);
     }
 
@@ -87,7 +99,7 @@ export default {
 
       const result = await handlePartnershipAnalysis(
         parsed.data,
-        env.GEMINI_API_KEY
+        resolveWorkerApiKey(env)
       );
       return jsonResponse(result.body, result.status);
     }
