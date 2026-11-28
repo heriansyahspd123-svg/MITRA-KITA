@@ -3,8 +3,10 @@ import {
   ClipboardCheck,
   Eye,
   MessageSquarePlus,
+  Pencil,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -19,6 +21,7 @@ import {
   MONITORING_INDICATORS,
   MONITORING_SCALE,
   MonitoringEvaluation,
+  SupervisorNote,
 } from '../types/mitraKita';
 import {
   computeMonitoringResult,
@@ -38,6 +41,7 @@ export const MonitoringPage: React.FC = () => {
     updateEvaluation,
     deleteEvaluation,
     addSupervisorNote,
+    updateSupervisorNote,
     deleteSupervisorNote,
   } = useMitraKita();
 
@@ -45,9 +49,19 @@ export const MonitoringPage: React.FC = () => {
     'riwayat'
   );
   const [detailEvalId, setDetailEvalId] = useState<string | null>(null);
+  const [editingEvalId, setEditingEvalId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MonitoringEvaluation | null>(
     null
   );
+
+  // Edit modal state for Supervisor Note
+  const [editingNote, setEditingNote] = useState<SupervisorNote | null>(null);
+  const [editNoteSchool, setEditNoteSchool] = useState('');
+  const [editNoteDate, setEditNoteDate] = useState('');
+  const [editNotePengawas, setEditNotePengawas] = useState('');
+  const [editNoteRec, setEditNoteRec] = useState('');
+  const [editNoteText, setEditNoteText] = useState('');
+  const [editNoteError, setEditNoteError] = useState('');
 
   // New Monitoring Form State — IMPORTANT: all 10 indicators start UNANSWERED!
   const [namaSekolah, setNamaSekolah] = useState(
@@ -69,6 +83,7 @@ export const MonitoringPage: React.FC = () => {
   const [kelemahan, setKelemahan] = useState('');
   const [rekomendasi, setRekomendasi] = useState('');
   const [rencanaTindakLanjut, setRencanaTindakLanjut] = useState('');
+  const [catatanPembinaanEval, setCatatanPembinaanEval] = useState('');
   const [formError, setFormError] = useState('');
 
   // Pengawas note inside Evaluation detail
@@ -107,15 +122,93 @@ export const MonitoringPage: React.FC = () => {
     return map;
   }, [dataset.programs]);
 
+  const defaultSchoolName =
+    dataset.schoolProfile.namaSekolah !== 'Nama Sekolah Binaan'
+      ? dataset.schoolProfile.namaSekolah
+      : '';
+
+  const defaultAssessorName =
+    session?.namaPengawas ||
+    dataset.schoolProfile.namaPengawas ||
+    'Pengawas Sekolah';
+
   const resetInstrumentForm = () => {
+    setEditingEvalId(null);
+    setNamaSekolah(defaultSchoolName);
+    setPeriode('Semester Ganjil 2026/2027');
+    setTanggalPenilaian(getTodayISO());
+    setPenilai(defaultAssessorName);
+    setProgramId('');
     setScores({});
     setTemuanMonitoring('');
     setKekuatan('');
     setKelemahan('');
     setRekomendasi('');
     setRencanaTindakLanjut('');
+    setCatatanPembinaanEval('');
     setFormError('');
-    setTanggalPenilaian(getTodayISO());
+  };
+
+  const startEditEvaluation = (ev: MonitoringEvaluation) => {
+    setDetailEvalId(null);
+    setEditingEvalId(ev.id);
+    setNamaSekolah(ev.namaSekolah || '');
+    setPeriode(ev.periode || '');
+    setTanggalPenilaian(ev.tanggalPenilaian || getTodayISO());
+    setPenilai(ev.penilai || defaultAssessorName);
+    setProgramId(ev.programId || '');
+    setScores({ ...ev.scores });
+    setTemuanMonitoring(ev.temuanMonitoring || '');
+    setKekuatan(ev.kekuatan || '');
+    setKelemahan(ev.kelemahan || '');
+    setRekomendasi(ev.rekomendasi || '');
+    setRencanaTindakLanjut(ev.rencanaTindakLanjut || '');
+    setCatatanPembinaanEval(ev.catatanPembinaanPengawas || '');
+    setFormError('');
+    setActiveTab('instrumen');
+  };
+
+  const cancelEditEvaluation = () => {
+    resetInstrumentForm();
+    setActiveTab('riwayat');
+  };
+
+  const openEditSupervisorNote = (note: SupervisorNote) => {
+    setEditingNote(note);
+    setEditNoteSchool(note.namaSekolah || defaultSchoolName);
+    setEditNoteDate(note.tanggal || getTodayISO());
+    setEditNotePengawas(note.pengawasNama || defaultAssessorName);
+    setEditNoteRec(note.rekomendasi === '-' ? '' : note.rekomendasi || '');
+    setEditNoteText(note.catatanPembinaan || '');
+    setEditNoteError('');
+  };
+
+  const handleSubmitEditSupervisorNote = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNote) return;
+    if (!editNoteSchool.trim()) {
+      setEditNoteError('Nama sekolah wajib diisi.');
+      return;
+    }
+    if (!editNoteDate || !editNotePengawas.trim()) {
+      setEditNoteError('Tanggal dan nama pengawas wajib diisi.');
+      return;
+    }
+    if (!editNoteText.trim()) {
+      setEditNoteError('Catatan pembinaan wajib diisi.');
+      return;
+    }
+    const ok = updateSupervisorNote(editingNote.id, {
+      namaSekolah: editNoteSchool.trim(),
+      tanggal: editNoteDate,
+      pengawasNama: editNotePengawas.trim(),
+      catatanPembinaan: editNoteText.trim(),
+      rekomendasi: editNoteRec.trim() || '-',
+    });
+    if (ok) {
+      setEditingNote(null);
+      setEditNoteError('');
+    }
   };
 
   const fillMonitoringExample = () => {
@@ -164,24 +257,43 @@ export const MonitoringPage: React.FC = () => {
       return;
     }
 
-    const ok = addEvaluation({
-      namaSekolah: namaSekolah.trim(),
-      periode: periode.trim(),
-      tanggalPenilaian,
-      penilai: penilai.trim(),
-      peranPenilai: role,
-      programId: programId || undefined,
-      scores: { ...scores },
-      totalSkorPerolehan: liveCalc.totalSkorPerolehan,
-      totalSkorMaksimal: liveCalc.totalSkorMaksimal,
-      nilaiAkhir: liveCalc.nilaiAkhir,
-      kategoriHasil: liveCalc.kategoriHasil,
-      temuanMonitoring: temuanMonitoring.trim(),
-      kekuatan: kekuatan.trim(),
-      kelemahan: kelemahan.trim(),
-      rekomendasi: rekomendasi.trim(),
-      rencanaTindakLanjut: rencanaTindakLanjut.trim(),
-    });
+    const ok = editingEvalId
+      ? updateEvaluation(editingEvalId, {
+          namaSekolah: namaSekolah.trim(),
+          periode: periode.trim(),
+          tanggalPenilaian,
+          penilai: penilai.trim(),
+          programId: programId || '',
+          scores: { ...scores },
+          totalSkorPerolehan: liveCalc.totalSkorPerolehan,
+          totalSkorMaksimal: liveCalc.totalSkorMaksimal,
+          nilaiAkhir: liveCalc.nilaiAkhir,
+          kategoriHasil: liveCalc.kategoriHasil,
+          temuanMonitoring: temuanMonitoring.trim(),
+          kekuatan: kekuatan.trim(),
+          kelemahan: kelemahan.trim(),
+          rekomendasi: rekomendasi.trim(),
+          rencanaTindakLanjut: rencanaTindakLanjut.trim(),
+          catatanPembinaanPengawas: catatanPembinaanEval.trim(),
+        })
+      : addEvaluation({
+          namaSekolah: namaSekolah.trim(),
+          periode: periode.trim(),
+          tanggalPenilaian,
+          penilai: penilai.trim(),
+          peranPenilai: role,
+          programId: programId || undefined,
+          scores: { ...scores },
+          totalSkorPerolehan: liveCalc.totalSkorPerolehan,
+          totalSkorMaksimal: liveCalc.totalSkorMaksimal,
+          nilaiAkhir: liveCalc.nilaiAkhir,
+          kategoriHasil: liveCalc.kategoriHasil,
+          temuanMonitoring: temuanMonitoring.trim(),
+          kekuatan: kekuatan.trim(),
+          kelemahan: kelemahan.trim(),
+          rekomendasi: rekomendasi.trim(),
+          rencanaTindakLanjut: rencanaTindakLanjut.trim(),
+        });
 
     if (ok) {
       resetInstrumentForm();
@@ -242,7 +354,10 @@ export const MonitoringPage: React.FC = () => {
         <div className="flex items-center gap-1 rounded-lg bg-[#E9EFEA] p-1">
           <button
             type="button"
-            onClick={() => setActiveTab('riwayat')}
+            onClick={() => {
+              if (editingEvalId) resetInstrumentForm();
+              setActiveTab('riwayat');
+            }}
             className={`rounded-md px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
               activeTab === 'riwayat'
                 ? 'bg-white text-[#14532D] shadow-xs'
@@ -254,19 +369,27 @@ export const MonitoringPage: React.FC = () => {
           {isAdmin && (
             <button
               type="button"
-              onClick={() => setActiveTab('instrumen')}
+              onClick={() => {
+                if (activeTab !== 'instrumen') {
+                  resetInstrumentForm();
+                  setActiveTab('instrumen');
+                }
+              }}
               className={`rounded-md px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
                 activeTab === 'instrumen'
                   ? 'bg-white text-[#14532D] shadow-xs'
                   : 'text-[#52635A] hover:text-[#14221B]'
               }`}
             >
-              Isi Instrumen Baru
+              {editingEvalId ? 'Edit Instrumen' : 'Isi Instrumen Baru'}
             </button>
           )}
           <button
             type="button"
-            onClick={() => setActiveTab('pembinaan')}
+            onClick={() => {
+              if (editingEvalId) resetInstrumentForm();
+              setActiveTab('pembinaan');
+            }}
             className={`rounded-md px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
               activeTab === 'pembinaan'
                 ? 'bg-white text-[#14532D] shadow-xs'
@@ -361,7 +484,7 @@ export const MonitoringPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => openEvalDetail(ev)}
@@ -373,15 +496,26 @@ export const MonitoringPage: React.FC = () => {
                       </span>
                     </button>
                     {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => setDeleteTarget(ev)}
-                        className="rounded-lg border border-[#D4DDD7] bg-white p-2 text-[#52635A] hover:bg-red-50 hover:text-[#B91C1C]"
-                        title="Hapus hasil monitoring"
-                        aria-label="Hapus hasil monitoring"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEditEvaluation(ev)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#D4DDD7] bg-white px-3 py-2 text-xs font-medium text-[#14221B] hover:border-[#14532D]/40 hover:bg-[#F0FDF4] hover:text-[#14532D] whitespace-nowrap"
+                          title="Edit hasil monitoring"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(ev)}
+                          className="rounded-lg border border-[#D4DDD7] bg-white p-2 text-[#52635A] hover:bg-red-50 hover:text-[#B91C1C]"
+                          title="Hapus hasil monitoring"
+                          aria-label="Hapus hasil monitoring"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -391,13 +525,38 @@ export const MonitoringPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: FORM INSTRUMEN MONITORING BARU (10 INDIKATOR) */}
+      {/* TAB 2: FORM INSTRUMEN MONITORING BARU / EDIT (10 INDIKATOR) */}
       {activeTab === 'instrumen' && isAdmin && (
         <form onSubmit={handleSubmitEvaluation} className="space-y-5">
-          <FormFillExampleBar
-            onFillAll={fillMonitoringExample}
-            label="Isi Contoh Teks Evaluasi"
-          />
+          {editingEvalId ? (
+            <div className="flex flex-col justify-between gap-3 rounded-xl border border-[#14532D]/30 bg-[#F0FDF4] px-4 py-3.5 sm:flex-row sm:items-center">
+              <div className="flex items-start gap-2.5">
+                <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-[#14532D]" />
+                <div>
+                  <p className="text-xs font-semibold text-[#14532D]">
+                    Mode Edit Hasil Monitoring
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#334155]">
+                    Perbarui identitas penilaian, skor 10 indikator, temuan, atau rencana tindak lanjut lalu klik{' '}
+                    <strong>Simpan Perubahan</strong>.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={cancelEditEvaluation}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#D4DDD7] bg-white px-3 py-1.5 text-xs font-medium text-[#14221B] hover:bg-[#F6F8F7] whitespace-nowrap"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Batal Edit</span>
+              </button>
+            </div>
+          ) : (
+            <FormFillExampleBar
+              onFillAll={fillMonitoringExample}
+              label="Isi Contoh Teks Evaluasi"
+            />
+          )}
 
           {/* Metadata */}
           <div className="rounded-xl border border-[#E2E8E4] bg-white p-5">
@@ -673,6 +832,21 @@ export const MonitoringPage: React.FC = () => {
               </div>
             </div>
 
+            {editingEvalId && isPengawas && (
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#14221B]">
+                  Catatan Pembinaan Pengawas (Opsional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={catatanPembinaanEval}
+                  onChange={(e) => setCatatanPembinaanEval(e.target.value)}
+                  placeholder="Catatan pembinaan atau arahan tindak lanjut dari pengawas sekolah"
+                  className="w-full rounded-lg border border-[#D4DDD7] px-3 py-2 text-sm text-[#14221B] focus:border-[#14532D] focus:outline-none"
+                />
+              </div>
+            )}
+
             {formError && (
               <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-[#B91C1C]">
                 {formError}
@@ -680,18 +854,28 @@ export const MonitoringPage: React.FC = () => {
             )}
 
             <div className="flex items-center justify-end gap-2.5 border-t border-[#EEF2EF] pt-4">
-              <button
-                type="button"
-                onClick={resetInstrumentForm}
-                className="rounded-lg border border-[#D4DDD7] bg-white px-4 py-2 text-sm font-medium text-[#14221B] hover:bg-[#F6F8F7]"
-              >
-                Reset Isian
-              </button>
+              {editingEvalId ? (
+                <button
+                  type="button"
+                  onClick={cancelEditEvaluation}
+                  className="rounded-lg border border-[#D4DDD7] bg-white px-4 py-2 text-sm font-medium text-[#14221B] hover:bg-[#F6F8F7]"
+                >
+                  Batal Edit
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={resetInstrumentForm}
+                  className="rounded-lg border border-[#D4DDD7] bg-white px-4 py-2 text-sm font-medium text-[#14221B] hover:bg-[#F6F8F7]"
+                >
+                  Reset Isian
+                </button>
+              )}
               <button
                 type="submit"
                 className="rounded-lg bg-[#14532D] px-5 py-2 text-sm font-medium text-white hover:bg-[#0F3F22]"
               >
-                Simpan Hasil Monitoring
+                {editingEvalId ? 'Simpan Perubahan' : 'Simpan Hasil Monitoring'}
               </button>
             </div>
           </div>
@@ -848,14 +1032,26 @@ export const MonitoringPage: React.FC = () => {
                         )}
                       </div>
                       {isPengawas && (
-                        <button
-                          type="button"
-                          onClick={() => deleteSupervisorNote(note.id)}
-                          className="rounded-md p-1.5 text-[#52635A] hover:bg-red-50 hover:text-[#B91C1C]"
-                          title="Hapus catatan"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEditSupervisorNote(note)}
+                            className="rounded-md p-1.5 text-[#52635A] hover:bg-[#F0FDF4] hover:text-[#14532D]"
+                            title="Edit catatan pembinaan"
+                            aria-label="Edit catatan pembinaan"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteSupervisorNote(note.id)}
+                            className="rounded-md p-1.5 text-[#52635A] hover:bg-red-50 hover:text-[#B91C1C]"
+                            title="Hapus catatan"
+                            aria-label="Hapus catatan"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </li>
@@ -892,15 +1088,27 @@ export const MonitoringPage: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-xs text-[#52635A]">Kategori Hasil</div>
-                <div
-                  className={`mt-1 text-base ${getStatusTextClass(
-                    detailEval.kategoriHasil
-                  )}`}
-                >
-                  {detailEval.kategoriHasil}
+              <div className="flex flex-col items-start gap-2 sm:items-end">
+                <div className="text-left sm:text-right">
+                  <div className="text-xs text-[#52635A]">Kategori Hasil</div>
+                  <div
+                    className={`mt-1 text-base ${getStatusTextClass(
+                      detailEval.kategoriHasil
+                    )}`}
+                  >
+                    {detailEval.kategoriHasil}
+                  </div>
                 </div>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => startEditEvaluation(detailEval)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#14532D]/30 bg-white px-3 py-1.5 text-xs font-medium text-[#14532D] hover:bg-[#14532D] hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    <span>Edit Hasil Monitoring</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1012,6 +1220,119 @@ export const MonitoringPage: React.FC = () => {
               )}
             </div>
           </div>
+        )}
+      </Modal>
+
+      {/* Edit Supervisor Note Modal */}
+      <Modal
+        open={Boolean(editingNote)}
+        title="Edit Catatan Pembinaan Pengawas"
+        subtitle={
+          editingNote
+            ? editingNote.targetType === 'PROGRAM' && editingNote.targetId
+              ? `Objek: ${programMap.get(editingNote.targetId) ?? 'Program Kemitraan'}`
+              : 'Objek: Pembinaan Tingkat Sekolah'
+            : undefined
+        }
+        maxWidthClass="max-w-2xl"
+        onClose={() => {
+          setEditingNote(null);
+          setEditNoteError('');
+        }}
+      >
+        {editingNote && (
+          <form onSubmit={handleSubmitEditSupervisorNote} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#14221B]">
+                  Nama Sekolah *
+                </label>
+                <input
+                  type="text"
+                  required
+                  list="mitra-kita-school-list"
+                  value={editNoteSchool}
+                  onChange={(e) => setEditNoteSchool(e.target.value)}
+                  className="w-full rounded-lg border border-[#D4DDD7] px-3 py-2 text-sm text-[#14221B] focus:border-[#14532D] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#14221B]">
+                  Tanggal *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={editNoteDate}
+                  onChange={(e) => setEditNoteDate(e.target.value)}
+                  className="w-full rounded-lg border border-[#D4DDD7] px-3 py-2 text-sm text-[#14221B] focus:border-[#14532D] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#14221B]">
+                  Nama Pengawas *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editNotePengawas}
+                  onChange={(e) => setEditNotePengawas(e.target.value)}
+                  className="w-full rounded-lg border border-[#D4DDD7] px-3 py-2 text-sm text-[#14221B] focus:border-[#14532D] focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-[#14221B]">
+                Rekomendasi Tindak Lanjut
+              </label>
+              <input
+                type="text"
+                value={editNoteRec}
+                onChange={(e) => setEditNoteRec(e.target.value)}
+                placeholder="Langkah perbaikan yang disarankan pengawas"
+                className="w-full rounded-lg border border-[#D4DDD7] px-3 py-2 text-sm text-[#14221B] focus:border-[#14532D] focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-[#14221B]">
+                Catatan Pembinaan *
+              </label>
+              <textarea
+                rows={4}
+                required
+                value={editNoteText}
+                onChange={(e) => setEditNoteText(e.target.value)}
+                className="w-full rounded-lg border border-[#D4DDD7] px-3 py-2 text-sm text-[#14221B] focus:border-[#14532D] focus:outline-none"
+              />
+            </div>
+
+            {editNoteError && (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-[#B91C1C]">
+                {editNoteError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 border-t border-[#EEF2EF] pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingNote(null);
+                  setEditNoteError('');
+                }}
+                className="rounded-lg border border-[#D4DDD7] bg-white px-4 py-2 text-xs font-medium text-[#14221B] hover:bg-[#F6F8F7]"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-[#14532D] px-4 py-2 text-xs font-medium text-white hover:bg-[#0F3F22]"
+              >
+                Simpan Perubahan
+              </button>
+            </div>
+          </form>
         )}
       </Modal>
 

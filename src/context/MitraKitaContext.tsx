@@ -168,6 +168,13 @@ interface MitraKitaContextValue {
   addSupervisorNote: (
     data: Omit<SupervisorNote, 'id' | 'createdAt' | 'isDemo'>
   ) => boolean;
+  updateSupervisorNote: (
+    id: string,
+    data: Pick<
+      SupervisorNote,
+      'namaSekolah' | 'tanggal' | 'pengawasNama' | 'catatanPembinaan' | 'rekomendasi'
+    >
+  ) => boolean;
   deleteSupervisorNote: (id: string) => void;
 
   // AI Analysis Persistence
@@ -2002,6 +2009,60 @@ export const MitraKitaProvider: React.FC<{ children: React.ReactNode }> = ({
     [firebaseUser, notify, reportFirestoreFailure]
   );
 
+  const updateSupervisorNote = useCallback(
+    (
+      id: string,
+      data: Pick<
+        SupervisorNote,
+        | 'namaSekolah'
+        | 'tanggal'
+        | 'pengawasNama'
+        | 'catatanPembinaan'
+        | 'rekomendasi'
+      >
+    ) => {
+      if (!firebaseUser) return false;
+      const cleanSchool = clampStr(data.namaSekolah, 200);
+      const cleanDate = clampStr(data.tanggal, 30);
+      const cleanPengawas = clampStr(data.pengawasNama, 150);
+      const cleanNote = clampStr(data.catatanPembinaan, 2500);
+      const cleanRec = clampStr(data.rekomendasi, 2500);
+
+      if (!cleanSchool || !cleanDate || !cleanPengawas || !cleanNote) {
+        notify(
+          'error',
+          'Data belum lengkap',
+          'Nama sekolah, tanggal, nama pengawas, dan catatan pembinaan wajib diisi.'
+        );
+        return false;
+      }
+
+      const path = `supervisorNotes/${id}`;
+      void (async () => {
+        try {
+          await updateDoc(doc(db, 'supervisorNotes', id), {
+            namaSekolah: cleanSchool,
+            tanggal: cleanDate,
+            pengawasNama: cleanPengawas,
+            catatanPembinaan: cleanNote,
+            rekomendasi: cleanRec,
+            updatedAt: serverTimestamp(),
+          });
+          notify('success', 'Catatan pembinaan diperbarui');
+        } catch (error) {
+          reportFirestoreFailure(
+            error,
+            OperationType.UPDATE,
+            path,
+            'Gagal memperbarui catatan pembinaan'
+          );
+        }
+      })();
+      return true;
+    },
+    [firebaseUser, notify, reportFirestoreFailure]
+  );
+
   const deleteSupervisorNote = useCallback(
     (id: string) => {
       if (!firebaseUser) return;
@@ -2937,6 +2998,7 @@ export const MitraKitaProvider: React.FC<{ children: React.ReactNode }> = ({
       updateEvaluation,
       deleteEvaluation,
       addSupervisorNote,
+      updateSupervisorNote,
       deleteSupervisorNote,
       saveAiAnalysis,
       deleteAiAnalysis,
@@ -2984,6 +3046,7 @@ export const MitraKitaProvider: React.FC<{ children: React.ReactNode }> = ({
       updateEvaluation,
       deleteEvaluation,
       addSupervisorNote,
+      updateSupervisorNote,
       deleteSupervisorNote,
       saveAiAnalysis,
       deleteAiAnalysis,
