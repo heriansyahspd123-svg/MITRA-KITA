@@ -1,9 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import {
+  CalendarDays,
   Download,
   FileDown,
   FileText,
   Loader2,
+  MapPin,
+  Pencil,
   PenLine,
   Printer,
   RotateCcw,
@@ -57,6 +60,152 @@ export const ReportsPage: React.FC = () => {
     nipKepalaSekolah: '',
   });
   const [savingSigners, setSavingSigners] = useState(false);
+
+  // Per-school & report letterhead metadata (Alamat Sekolah, NPSN, Tahun Ajaran, Dicetak, Periode)
+  const REPORT_META_STORAGE_KEY = 'mitra_kita_report_meta_v1';
+  interface SavedReportMeta {
+    perSchool: Record<string, { alamatSekolah: string; npsn: string }>;
+    printedDate: string;
+    printCity: string;
+    customPeriodLabel: string;
+  }
+  const [reportMeta, setReportMeta] = useState<SavedReportMeta>(() => {
+    try {
+      const raw = window.localStorage.getItem(REPORT_META_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<SavedReportMeta>;
+        return {
+          perSchool:
+            parsed.perSchool && typeof parsed.perSchool === 'object'
+              ? parsed.perSchool
+              : {},
+          printedDate: typeof parsed.printedDate === 'string' ? parsed.printedDate : '',
+          printCity: typeof parsed.printCity === 'string' ? parsed.printCity : '',
+          customPeriodLabel:
+            typeof parsed.customPeriodLabel === 'string'
+              ? parsed.customPeriodLabel
+              : '',
+        };
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return {
+      perSchool: {},
+      printedDate: '',
+      printCity: '',
+      customPeriodLabel: '',
+    };
+  });
+
+  const [headerModalOpen, setHeaderModalOpen] = useState(false);
+  const [headerModalFocus, setHeaderModalFocus] = useState<'alamat' | 'meta'>(
+    'alamat'
+  );
+  const [headerForm, setHeaderForm] = useState({
+    alamatSekolah: '',
+    npsn: '',
+    tahunAjaran: '',
+    printedDate: '',
+    printCity: '',
+    customPeriodLabel: '',
+  });
+
+  const activeSchoolTitle =
+    schoolFilter !== 'ALL'
+      ? schoolFilter
+      : dataset.schoolProfile.namaSekolah || 'Semua Sekolah Binaan';
+  const activeSchoolKey =
+    schoolFilter !== 'ALL' ? schoolFilter.trim().toLowerCase() : '__DEFAULT__';
+
+  const savedSchoolOverride = reportMeta.perSchool[activeSchoolKey];
+  const effectiveAlamatSekolah =
+    savedSchoolOverride?.alamatSekolah !== undefined
+      ? savedSchoolOverride.alamatSekolah
+      : dataset.schoolProfile.alamatSekolah || '';
+  const effectiveNpsn =
+    savedSchoolOverride?.npsn !== undefined
+      ? savedSchoolOverride.npsn
+      : dataset.schoolProfile.npsn || '';
+  const effectiveTahunAjaran = dataset.schoolProfile.tahunAjaran || '2026/2027';
+  const effectivePrintedDate = reportMeta.printedDate || getTodayISO();
+  const effectivePrintCity = reportMeta.printCity || '';
+  const autoPeriodLabel =
+    startDate || endDate
+      ? `${startDate ? formatDateID(startDate) : 'Awal'} – ${
+          endDate ? formatDateID(endDate) : 'Sekarang'
+        }`
+      : 'Semua Periode';
+  const effectivePeriodLabel =
+    reportMeta.customPeriodLabel.trim() || autoPeriodLabel;
+  const effectiveSignatureDate = effectivePrintCity.trim()
+    ? `${effectivePrintCity.trim()}, ${formatDateID(effectivePrintedDate)}`
+    : formatDateID(effectivePrintedDate);
+
+  const openHeaderModal = (focusSection: 'alamat' | 'meta' = 'alamat') => {
+    setHeaderModalFocus(focusSection);
+    setHeaderForm({
+      alamatSekolah: effectiveAlamatSekolah,
+      npsn: effectiveNpsn,
+      tahunAjaran: effectiveTahunAjaran,
+      printedDate: effectivePrintedDate,
+      printCity: effectivePrintCity,
+      customPeriodLabel: reportMeta.customPeriodLabel,
+    });
+    setHeaderModalOpen(true);
+  };
+
+  const handleSaveHeaderMeta = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanAlamat = headerForm.alamatSekolah.trim().slice(0, 400);
+    const cleanNpsn = headerForm.npsn.trim().slice(0, 40);
+    const cleanTahunAjaran = headerForm.tahunAjaran.trim().slice(0, 40) || '2026/2027';
+    const cleanPrintedDate = headerForm.printedDate.trim();
+    const cleanPrintCity = headerForm.printCity.trim().slice(0, 80);
+    const cleanPeriodLabel = headerForm.customPeriodLabel.trim().slice(0, 100);
+
+    const nextMeta: SavedReportMeta = {
+      perSchool: {
+        ...reportMeta.perSchool,
+        [activeSchoolKey]: {
+          alamatSekolah: cleanAlamat,
+          npsn: cleanNpsn,
+        },
+      },
+      printedDate: cleanPrintedDate,
+      printCity: cleanPrintCity,
+      customPeriodLabel: cleanPeriodLabel,
+    };
+
+    setReportMeta(nextMeta);
+    try {
+      window.localStorage.setItem(
+        REPORT_META_STORAGE_KEY,
+        JSON.stringify(nextMeta)
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+
+    // Persist Tahun Ajaran (and default Alamat/NPSN when viewing default or when profile address is empty) to Firestore
+    const shouldSyncProfileAddress =
+      schoolFilter === 'ALL' || !dataset.schoolProfile.alamatSekolah.trim();
+    updateSchoolProfile({
+      ...dataset.schoolProfile,
+      tahunAjaran: cleanTahunAjaran,
+      alamatSekolah: shouldSyncProfileAddress
+        ? cleanAlamat
+        : dataset.schoolProfile.alamatSekolah,
+      npsn: shouldSyncProfileAddress ? cleanNpsn : dataset.schoolProfile.npsn,
+    });
+
+    setHeaderModalOpen(false);
+    notify(
+      'success',
+      'Kop & metadata laporan diperbarui',
+      'Perubahan langsung tampil di pratinjau, PDF, Word, dan Print.'
+    );
+  };
 
   const effectiveNamaPengawas =
     dataset.schoolProfile.namaPengawas || session?.namaPengawas || '';
@@ -265,6 +414,9 @@ export const ReportsPage: React.FC = () => {
   const buildExportPayload = (): ReportExportPayload => ({
     schoolProfile: {
       ...dataset.schoolProfile,
+      alamatSekolah: effectiveAlamatSekolah,
+      npsn: effectiveNpsn,
+      tahunAjaran: effectiveTahunAjaran,
       namaPengawas: effectiveNamaPengawas,
       nipPengawas: effectiveNipPengawas,
       kepalaSekolah: effectiveKepalaSekolah,
@@ -273,6 +425,9 @@ export const ReportsPage: React.FC = () => {
     schoolFilter,
     startDate,
     endDate,
+    printedDate: effectivePrintedDate,
+    periodLabel: reportMeta.customPeriodLabel.trim() || undefined,
+    printCity: effectivePrintCity || undefined,
     partnerCategoryFilter,
     pmAreaFilter,
     partners: filteredPartners,
@@ -341,15 +496,11 @@ export const ReportsPage: React.FC = () => {
         'Filter Sekolah',
         schoolFilter === 'ALL' ? 'Semua Sekolah' : schoolFilter,
       ],
-      ['NPSN', dataset.schoolProfile.npsn],
-      ['Tahun Ajaran', dataset.schoolProfile.tahunAjaran],
-      ['Tanggal Ekspor', getTodayISO()],
-      [
-        'Filter Periode',
-        startDate || endDate
-          ? `${startDate || 'Awal'} s.d. ${endDate || 'Sekarang'}`
-          : 'Semua Periode',
-      ],
+      ['Alamat Sekolah', effectiveAlamatSekolah || '-'],
+      ['NPSN', effectiveNpsn || '-'],
+      ['Tahun Ajaran', effectiveTahunAjaran],
+      ['Tanggal Dicetak', formatDateID(effectivePrintedDate)],
+      ['Periode', effectivePeriodLabel],
       [
         'Filter Jenis Mitra',
         partnerCategoryFilter === 'ALL' ? 'Semua Kategori' : partnerCategoryFilter,
@@ -571,6 +722,14 @@ export const ReportsPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => openHeaderModal('alamat')}
+            className="inline-flex items-center gap-2 rounded-xl border border-[#D4E0D9] bg-white px-3.5 py-2.5 text-sm font-medium text-[#11221A] shadow-[0_1px_2px_rgba(16,38,26,0.03)] hover:border-[#14532D]/40 hover:bg-[#F5FAF7] hover:text-[#14532D] whitespace-nowrap shrink-0"
+          >
+            <Pencil className="h-4 w-4 text-[#14532D]" />
+            <span>Edit Kop &amp; Periode</span>
+          </button>
+          <button
+            type="button"
             onClick={openSignerModal}
             className="inline-flex items-center gap-2 rounded-xl border border-[#14532D]/30 bg-[#EDF6F0] px-3.5 py-2.5 text-sm font-semibold text-[#14532D] shadow-[0_1px_2px_rgba(16,38,26,0.03)] hover:border-[#14532D]/50 hover:bg-[#DCFCE7] whitespace-nowrap shrink-0"
           >
@@ -724,33 +883,77 @@ export const ReportsPage: React.FC = () => {
       <div className="print-full-width space-y-8 rounded-xl border border-[#E2E8E4] bg-white p-6 sm:p-8">
         {/* Report Letterhead / Kop Laporan */}
         <header className="border-b-2 border-[#14532D] pb-5">
-          <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
-            <div>
-              <div className="text-xs font-semibold tracking-wide text-[#14532D]">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="text-[11px] font-bold tracking-[0.08em] text-[#14532D] uppercase">
                 LAPORAN PENGELOLAAN KEMITRAAN SEKOLAH · MITRA KITA
               </div>
-              <h1 className="mt-1 text-xl font-bold text-[#14221B]">
-                {schoolFilter !== 'ALL'
-                  ? schoolFilter
-                  : dataset.schoolProfile.namaSekolah}
+              <h1 className="text-xl font-bold tracking-tight text-[#11221A] sm:text-2xl">
+                {activeSchoolTitle}
               </h1>
-              <p className="mt-0.5 text-xs text-[#52635A]">
-                {dataset.schoolProfile.alamatSekolah || 'Alamat sekolah belum diisi'}
-                {dataset.schoolProfile.npsn
-                  ? ` · NPSN: ${dataset.schoolProfile.npsn}`
-                  : ''}
-              </p>
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 pt-0.5 text-xs text-[#52635A]">
+                {effectiveAlamatSekolah || effectiveNpsn ? (
+                  <span className="inline-flex items-start gap-1.5 leading-relaxed">
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#14532D]/70" />
+                    <span>
+                      {effectiveAlamatSekolah || 'Alamat sekolah belum diisi'}
+                      {effectiveNpsn ? (
+                        <span className="font-mono text-[#334155]">
+                          {' '}
+                          · NPSN: {effectiveNpsn}
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="no-print italic text-[#73857B]">
+                    Alamat sekolah belum diisi
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openHeaderModal('alamat')}
+                  className="no-print inline-flex items-center gap-1 rounded-md border border-[#D4DDD7] bg-[#F8FBF9] px-2 py-0.5 text-[11px] font-medium text-[#14532D] transition-colors hover:border-[#14532D]/40 hover:bg-[#EDF6F0]"
+                  title="Edit alamat sekolah dan NPSN"
+                >
+                  <Pencil className="h-3 w-3" />
+                  <span>
+                    {effectiveAlamatSekolah ? 'Edit Alamat' : 'Isi Alamat Sekolah'}
+                  </span>
+                </button>
+              </div>
             </div>
-            <div className="text-left text-xs text-[#52635A] sm:text-right tabular-nums">
-              <div>Tahun Ajaran: {dataset.schoolProfile.tahunAjaran}</div>
-              <div>Dicetak: {formatDateID(getTodayISO())}</div>
-              <div>
-                Periode:{' '}
-                {startDate || endDate
-                  ? `${startDate ? formatDateID(startDate) : 'Awal'} – ${
-                      endDate ? formatDateID(endDate) : 'Sekarang'
-                    }`
-                  : 'Semua Periode'}
+
+            <div className="shrink-0 rounded-xl border border-[#DCE6DF] bg-[#F8FBF9] px-4 py-3 text-xs tabular-nums md:min-w-[260px]">
+              <div className="space-y-1.5">
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="text-[#5B6F65]">Tahun Ajaran</span>
+                  <span className="font-semibold text-[#11221A]">
+                    {effectiveTahunAjaran}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="text-[#5B6F65]">Dicetak</span>
+                  <span className="font-semibold text-[#11221A]">
+                    {formatDateID(effectivePrintedDate)}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="text-[#5B6F65]">Periode</span>
+                  <span className="text-right font-semibold text-[#14532D]">
+                    {effectivePeriodLabel}
+                  </span>
+                </div>
+              </div>
+              <div className="no-print mt-2.5 flex justify-end border-t border-[#E4EDE7] pt-2">
+                <button
+                  type="button"
+                  onClick={() => openHeaderModal('meta')}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#14532D] hover:underline"
+                >
+                  <CalendarDays className="h-3 w-3" />
+                  <span>Edit Tahun Ajaran, Dicetak &amp; Periode</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1257,7 +1460,7 @@ export const ReportsPage: React.FC = () => {
               </div>
             </div>
             <div className="text-right">
-              <div>{formatDateID(getTodayISO())}</div>
+              <div>{effectiveSignatureDate}</div>
               <div className="font-semibold">Kepala Sekolah</div>
               <div className="mt-14 font-semibold underline">
                 {effectiveKepalaSekolah || '....................................'}
@@ -1404,7 +1607,7 @@ export const ReportsPage: React.FC = () => {
                 </div>
               </div>
               <div className="text-right">
-                <div>{formatDateID(getTodayISO())}</div>
+                <div>{effectiveSignatureDate}</div>
                 <div className="font-semibold">Kepala Sekolah</div>
                 <div className="mt-9 font-semibold underline">
                   {signerForm.kepalaSekolah.trim() ||
@@ -1434,6 +1637,264 @@ export const ReportsPage: React.FC = () => {
             >
               <Save className="h-4 w-4" />
               <span>{savingSigners ? 'Menyimpan...' : 'Simpan Nama & NIP'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Edit Kop Laporan: Alamat Sekolah, NPSN, Tahun Ajaran, Dicetak & Periode */}
+      <Modal
+        open={headerModalOpen}
+        title="Edit Kop & Metadata Laporan"
+        subtitle={`Sesuaikan alamat sekolah, tahun ajaran, tanggal cetak, dan keterangan periode untuk "${activeSchoolTitle}".`}
+        maxWidthClass="max-w-2xl"
+        onClose={() => setHeaderModalOpen(false)}
+      >
+        <form onSubmit={handleSaveHeaderMeta} className="space-y-5">
+          {/* Section 1: Alamat Sekolah & NPSN */}
+          <div
+            className={`space-y-3 rounded-xl border p-4 ${
+              headerModalFocus === 'alamat'
+                ? 'border-[#14532D]/40 bg-[#F7FBF8]'
+                : 'border-[#E2EAE5] bg-[#FAFDFB]'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 text-xs font-bold tracking-wide text-[#14532D] uppercase">
+              <MapPin className="h-3.5 w-3.5" />
+              <span>1. Identitas &amp; Alamat Sekolah</span>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-[#11221A]">
+                Alamat Lengkap Sekolah ({activeSchoolTitle})
+              </label>
+              <textarea
+                rows={2}
+                value={headerForm.alamatSekolah}
+                onChange={(e) =>
+                  setHeaderForm({ ...headerForm, alamatSekolah: e.target.value })
+                }
+                placeholder="Contoh: Jl. Poros Parepare–Sengkang Km. 5, Desa Wanio, Kec. Panca Lautang, Kab. Sidenreng Rappang"
+                className="w-full rounded-lg border border-[#D4E0D9] bg-white px-3 py-2 text-sm text-[#11221A] focus:border-[#14532D] focus:outline-none"
+              />
+              <FieldExampleHint
+                examples={SETTINGS_FIELD_EXAMPLES.alamatSekolah}
+                onApply={(val) =>
+                  setHeaderForm({ ...headerForm, alamatSekolah: val })
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#11221A]">
+                  NPSN (Opsional)
+                </label>
+                <input
+                  type="text"
+                  value={headerForm.npsn}
+                  onChange={(e) =>
+                    setHeaderForm({ ...headerForm, npsn: e.target.value })
+                  }
+                  placeholder="Contoh: 40305512"
+                  className="w-full rounded-lg border border-[#D4E0D9] bg-white px-3 py-2 font-mono text-sm text-[#11221A] focus:border-[#14532D] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#11221A]">
+                  Kota / Kecamatan Tanda Tangan (Opsional)
+                </label>
+                <input
+                  type="text"
+                  value={headerForm.printCity}
+                  onChange={(e) =>
+                    setHeaderForm({ ...headerForm, printCity: e.target.value })
+                  }
+                  placeholder="Contoh: Panca Lautang / Sidrap"
+                  className="w-full rounded-lg border border-[#D4E0D9] bg-white px-3 py-2 text-sm text-[#11221A] focus:border-[#14532D] focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Tahun Ajaran, Tanggal Dicetak & Periode */}
+          <div
+            className={`space-y-3 rounded-xl border p-4 ${
+              headerModalFocus === 'meta'
+                ? 'border-[#14532D]/40 bg-[#F7FBF8]'
+                : 'border-[#E2EAE5] bg-[#FAFDFB]'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 text-xs font-bold tracking-wide text-[#14532D] uppercase">
+              <CalendarDays className="h-3.5 w-3.5" />
+              <span>2. Tahun Ajaran, Tanggal Dicetak &amp; Periode</span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-[#11221A]">
+                  Tahun Ajaran
+                </label>
+                <input
+                  type="text"
+                  value={headerForm.tahunAjaran}
+                  onChange={(e) =>
+                    setHeaderForm({ ...headerForm, tahunAjaran: e.target.value })
+                  }
+                  placeholder="2026/2027"
+                  className="w-full rounded-lg border border-[#D4E0D9] bg-white px-3 py-2 text-sm text-[#11221A] focus:border-[#14532D] focus:outline-none"
+                />
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {['2025/2026', '2026/2027', '2027/2028'].map((ta) => (
+                    <button
+                      key={ta}
+                      type="button"
+                      onClick={() =>
+                        setHeaderForm({ ...headerForm, tahunAjaran: ta })
+                      }
+                      className="rounded-md border border-[#D4DDD7] bg-white px-2 py-0.5 text-[11px] font-medium text-[#334155] hover:border-[#14532D]/40 hover:text-[#14532D]"
+                    >
+                      {ta}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-[#11221A]">
+                    Tanggal Dicetak
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHeaderForm({ ...headerForm, printedDate: getTodayISO() })
+                    }
+                    className="text-[11px] font-semibold text-[#14532D] hover:underline"
+                  >
+                    Hari Ini
+                  </button>
+                </div>
+                <input
+                  type="date"
+                  value={headerForm.printedDate}
+                  onChange={(e) =>
+                    setHeaderForm({ ...headerForm, printedDate: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-[#D4E0D9] bg-white px-3 py-2 text-sm text-[#11221A] focus:border-[#14532D] focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-semibold text-[#11221A]">
+                  Keterangan Periode Laporan
+                </label>
+                {headerForm.customPeriodLabel && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setHeaderForm({ ...headerForm, customPeriodLabel: '' })
+                    }
+                    className="text-[11px] font-semibold text-[#5B6F65] hover:text-[#14532D] hover:underline"
+                  >
+                    Ikuti Filter Tanggal ({autoPeriodLabel})
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                value={headerForm.customPeriodLabel}
+                onChange={(e) =>
+                  setHeaderForm({
+                    ...headerForm,
+                    customPeriodLabel: e.target.value,
+                  })
+                }
+                placeholder={`Kosongkan untuk otomatis (${autoPeriodLabel}) atau ketik mis. Semester Ganjil 2026/2027`}
+                className="w-full rounded-lg border border-[#D4E0D9] bg-white px-3 py-2 text-sm text-[#11221A] focus:border-[#14532D] focus:outline-none"
+              />
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {[
+                  `Semester Ganjil ${headerForm.tahunAjaran || '2026/2027'}`,
+                  `Semester Genap ${headerForm.tahunAjaran || '2026/2027'}`,
+                  `Tahun Pelajaran ${headerForm.tahunAjaran || '2026/2027'}`,
+                  'Triwulan I',
+                  'Triwulan II',
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() =>
+                      setHeaderForm({ ...headerForm, customPeriodLabel: preset })
+                    }
+                    className="rounded-md border border-[#D4DDD7] bg-white px-2 py-0.5 text-[11px] font-medium text-[#334155] hover:border-[#14532D]/40 hover:text-[#14532D]"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Live Preview Kop Laporan */}
+          <div className="rounded-xl border border-[#E2EAE5] bg-white p-4">
+            <div className="mb-2.5 text-[11px] font-semibold tracking-wide text-[#5B6F65] uppercase">
+              Pratinjau Kop Laporan
+            </div>
+            <div className="flex flex-col justify-between gap-3 border-b-2 border-[#14532D] pb-3.5 sm:flex-row sm:items-start">
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-bold tracking-wider text-[#14532D] uppercase">
+                  LAPORAN PENGELOLAAN KEMITRAAN SEKOLAH · MITRA KITA
+                </div>
+                <div className="mt-0.5 text-base font-bold text-[#11221A]">
+                  {activeSchoolTitle}
+                </div>
+                <div className="mt-0.5 text-[11px] text-[#52635A]">
+                  {headerForm.alamatSekolah.trim() || 'Alamat sekolah belum diisi'}
+                  {headerForm.npsn.trim()
+                    ? ` · NPSN: ${headerForm.npsn.trim()}`
+                    : ''}
+                </div>
+              </div>
+              <div className="shrink-0 rounded-lg border border-[#DCE6DF] bg-[#F8FBF9] px-3 py-2 text-[11px] tabular-nums sm:min-w-[205px]">
+                <div className="flex justify-between gap-3">
+                  <span className="text-[#5B6F65]">Tahun Ajaran</span>
+                  <span className="font-semibold text-[#11221A]">
+                    {headerForm.tahunAjaran.trim() || '2026/2027'}
+                  </span>
+                </div>
+                <div className="mt-0.5 flex justify-between gap-3">
+                  <span className="text-[#5B6F65]">Dicetak</span>
+                  <span className="font-semibold text-[#11221A]">
+                    {formatDateID(headerForm.printedDate || getTodayISO())}
+                  </span>
+                </div>
+                <div className="mt-0.5 flex justify-between gap-3">
+                  <span className="text-[#5B6F65]">Periode</span>
+                  <span className="font-semibold text-[#14532D]">
+                    {headerForm.customPeriodLabel.trim() || autoPeriodLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2.5 border-t border-[#EEF3F0] pt-4">
+            <button
+              type="button"
+              onClick={() => setHeaderModalOpen(false)}
+              className="rounded-xl border border-[#D4E0D9] bg-white px-4 py-2 text-sm font-medium text-[#11221A] hover:bg-[#F5FAF7]"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#14532D] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0E3F22]"
+            >
+              <Save className="h-4 w-4" />
+              <span>Simpan Kop Laporan</span>
             </button>
           </div>
         </form>

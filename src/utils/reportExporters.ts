@@ -38,6 +38,9 @@ export interface ReportExportPayload {
   schoolFilter: string;
   startDate: string;
   endDate: string;
+  printedDate?: string;
+  periodLabel?: string;
+  printCity?: string;
   partnerCategoryFilter: string;
   pmAreaFilter: string;
   partners: Partner[];
@@ -63,8 +66,18 @@ function sanitizeFilenameSegment(input: string): string {
     .slice(0, 40);
 }
 
+function getEffectivePrintedDateIso(payload: ReportExportPayload): string {
+  return (payload.printedDate || '').trim() || getTodayISO();
+}
+
+function getSignatureDateText(payload: ReportExportPayload): string {
+  const dateLabel = formatDateID(getEffectivePrintedDateIso(payload));
+  const city = (payload.printCity || '').trim();
+  return city ? `${city}, ${dateLabel}` : dateLabel;
+}
+
 function buildReportFilename(payload: ReportExportPayload, ext: 'pdf' | 'docx'): string {
-  const datePart = getTodayISO();
+  const datePart = getEffectivePrintedDateIso(payload);
   const schoolSlug =
     payload.schoolFilter !== 'ALL'
       ? `_${sanitizeFilenameSegment(payload.schoolFilter)}`
@@ -72,10 +85,12 @@ function buildReportFilename(payload: ReportExportPayload, ext: 'pdf' | 'docx'):
   return `Laporan_Kemitraan_MITRA_KITA${schoolSlug}_${datePart}.${ext}`;
 }
 
-function getPeriodText(startDate: string, endDate: string): string {
-  if (!startDate && !endDate) return 'Semua Periode';
-  const startLabel = startDate ? formatDateID(startDate) : 'Awal';
-  const endLabel = endDate ? formatDateID(endDate) : 'Sekarang';
+function getPeriodText(payload: ReportExportPayload): string {
+  const custom = (payload.periodLabel || '').trim();
+  if (custom) return custom;
+  if (!payload.startDate && !payload.endDate) return 'Semua Periode';
+  const startLabel = payload.startDate ? formatDateID(payload.startDate) : 'Awal';
+  const endLabel = payload.endDate ? formatDateID(payload.endDate) : 'Sekarang';
   return `${startLabel} – ${endLabel}`;
 }
 
@@ -148,6 +163,8 @@ export function exportReportToPdf(payload: ReportExportPayload): void {
 
   // Right metadata block
   const rightX = pageWidth - marginX;
+  const printedDateLabel = formatDateID(getEffectivePrintedDateIso(payload));
+  const periodText = getPeriodText(payload);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...mutedRgb);
@@ -157,28 +174,28 @@ export function exportReportToPdf(payload: ReportExportPayload): void {
     14,
     { align: 'right' }
   );
-  doc.text(`Dicetak: ${formatDateID(getTodayISO())}`, rightX, 18.5, {
+  doc.text(`Dicetak: ${printedDateLabel}`, rightX, 18.5, {
     align: 'right',
   });
-  doc.text(
-    `Periode: ${getPeriodText(payload.startDate, payload.endDate)}`,
-    rightX,
-    23,
-    { align: 'right' }
-  );
+  doc.text(`Periode: ${periodText}`, rightX, 23, { align: 'right' });
 
   cursorY += Math.max(schoolTitleLines.length * 5.2, 5.2) + 1;
   const addressParts = [
-    payload.schoolProfile.alamatSekolah || 'Alamat sekolah belum diisi',
+    (payload.schoolProfile.alamatSekolah || '').trim(),
     payload.schoolProfile.npsn ? `NPSN: ${payload.schoolProfile.npsn}` : '',
   ]
     .filter(Boolean)
     .join(' · ');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...mutedRgb);
-  const addressLines = doc.splitTextToSize(addressParts, contentWidth * 0.68);
-  doc.text(addressLines, marginX, cursorY);
-  cursorY += addressLines.length * 4 + 3;
+  if (addressParts) {
+    doc.setFontSize(8.5);
+    doc.setTextColor(...mutedRgb);
+    const addressLines = doc.splitTextToSize(addressParts, contentWidth * 0.62);
+    doc.text(addressLines, marginX, cursorY);
+    cursorY += addressLines.length * 4 + 3;
+  } else {
+    cursorY = Math.max(cursorY + 3, 27);
+  }
+  cursorY = Math.max(cursorY, 27);
 
   // Green bottom divider line
   doc.setDrawColor(...forestRgb);
@@ -555,7 +572,7 @@ export function exportReportToPdf(payload: ReportExportPayload): void {
   doc.setFontSize(9);
   doc.setTextColor(...inkRgb);
   doc.text('Mengetahui,', marginX, cursorY);
-  doc.text(formatDateID(getTodayISO()), rightX, cursorY, { align: 'right' });
+  doc.text(getSignatureDateText(payload), rightX, cursorY, { align: 'right' });
 
   cursorY += 4.5;
   doc.setFont('helvetica', 'bold');
@@ -755,11 +772,13 @@ export async function exportReportToWord(
 ): Promise<void> {
   const schoolTitle = getHeaderSchoolTitle(payload);
   const addressLine = [
-    payload.schoolProfile.alamatSekolah || 'Alamat sekolah belum diisi',
+    (payload.schoolProfile.alamatSekolah || '').trim(),
     payload.schoolProfile.npsn ? `NPSN: ${payload.schoolProfile.npsn}` : '',
   ]
     .filter(Boolean)
     .join(' · ');
+  const printedDateLabel = formatDateID(getEffectivePrintedDateIso(payload));
+  const periodText = getPeriodText(payload);
 
   const children: (Paragraph | Table)[] = [];
 
@@ -789,17 +808,21 @@ export async function exportReportToWord(
         }),
       ],
     }),
-    new Paragraph({
-      spacing: { after: 80 },
-      children: [
-        new TextRun({
-          text: addressLine,
-          size: 18,
-          color: COLOR_MUTED,
-          font: DOC_FONT,
-        }),
-      ],
-    }),
+    ...(addressLine
+      ? [
+          new Paragraph({
+            spacing: { after: 80 },
+            children: [
+              new TextRun({
+                text: addressLine,
+                size: 18,
+                color: COLOR_MUTED,
+                font: DOC_FONT,
+              }),
+            ],
+          }),
+        ]
+      : []),
     new Paragraph({
       spacing: { after: 200 },
       border: {
@@ -807,7 +830,7 @@ export async function exportReportToWord(
       },
       children: [
         new TextRun({
-          text: `Tahun Ajaran: ${payload.schoolProfile.tahunAjaran || '-'}   |   Dicetak: ${formatDateID(getTodayISO())}   |   Periode: ${getPeriodText(payload.startDate, payload.endDate)}`,
+          text: `Tahun Ajaran: ${payload.schoolProfile.tahunAjaran || '-'}   |   Dicetak: ${printedDateLabel}   |   Periode: ${periodText}`,
           size: 17,
           color: COLOR_MUTED,
           font: DOC_FONT,
@@ -1258,7 +1281,7 @@ export async function exportReportToWord(
                   alignment: AlignmentType.RIGHT,
                   children: [
                     new TextRun({
-                      text: formatDateID(getTodayISO()),
+                      text: getSignatureDateText(payload),
                       size: 19,
                       color: COLOR_INK,
                       font: DOC_FONT,
